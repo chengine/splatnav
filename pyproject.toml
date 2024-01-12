@@ -1,0 +1,25 @@
+[project]
+name = "gemsplat"
+version = "0.1.1"
+requires-python = ">=3.8"
+
+dependencies=[
+    "timm",
+    "ftfy",
+    "regex",
+    "tqdm",
+    "clip @ git+https://github.com/openai/CLIP.git",
+    "einops",
+    "gdown",
+    "matplotlib",
+    "nerfstudio>=0.3.3",
+    "numpy",
+    "pillow",
+    "torchtyping",
+]
+
+[tool.setuptools.packages.find]
+include = ["gemsplat*"]
+
+[project.entry-points.'nerfstudio.method_configs']
+gemsplat = 'gemsplat.gemsplat_config:gemsplat_method'
