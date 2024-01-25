@@ -726,7 +726,7 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
                                                         ColormapOptions("turbo"))
 
     
-            if self.viewer_utils.has_positives:
+            if self.viewer_utils.has_positives and "rgb" in outputs.keys():
                 # composited similarity
                 p_i = torch.clip(outputs["similarity"] - 0.5, 0, 1)
                 
@@ -737,12 +737,14 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         return outputs
 
 
-    def get_outputs(self, camera: Cameras) -> Dict[str, Union[torch.Tensor, List]]:
+    def get_outputs(self, camera: Cameras,
+                    compute_semantics: Optional[bool] = True) -> Dict[str, Union[torch.Tensor, List]]:
         """Takes in a Ray Bundle and returns a dictionary of outputs.
 
         Args:
             ray_bundle: Input bundle of rays. This raybundle should have all the
             needed information to compute the outputs.
+            compute_semantics: Option to compute the semantic information of the scene.
 
         Returns:
             Outputs of model. (ie. rendered colors)
@@ -898,7 +900,7 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
                    "clip": clip_embeds_im,
                 }  # type: ignore
         
-        if not self.training:
+        if not self.training and compute_semantics:
             # Compute semantic inputs, e.g., composited semantic similarity.
             outputs = self.get_semantic_outputs(outputs=outputs)
             
@@ -1002,7 +1004,9 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         }
 
     @torch.no_grad()
-    def get_outputs_for_camera(self, camera: Cameras, obb_box: Optional[OrientedBox] = None) -> Dict[str, torch.Tensor]:
+    def get_outputs_for_camera(self, camera: Cameras,
+                               obb_box: Optional[OrientedBox] = None,
+                               compute_semantics: Optional[bool] = True) -> Dict[str, torch.Tensor]:
         """Takes in a camera, generates the raybundle, and computes the output of the model.
         Overridden for a camera-based gaussian model.
 
@@ -1011,7 +1015,7 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         """
         assert camera is not None, "must provide camera to gaussian model"
         self.set_crop(obb_box)
-        outs = self.get_outputs(camera.to(self.device))
+        outs = self.get_outputs(camera.to(self.device), compute_semantics=compute_semantics)
         return outs  # type: ignore
 
     def get_image_metrics_and_images(
