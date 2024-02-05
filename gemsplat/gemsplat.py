@@ -571,6 +571,32 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         print(f"Culled {n_bef - self.num_points} gaussians")
         return culls
 
+    def cull_gaussians_refinement(self, cull_alpha_thresh, cull_scale_thresh):
+        """
+        This function deletes gaussians with under a certain opacity threshold
+        """
+        n_bef = self.num_points
+        # cull transparent ones
+        culls = (torch.sigmoid(self.opacities) < cull_alpha_thresh).squeeze()
+        # if self.step > self.config.refine_every * self.config.reset_alpha_every:
+        # cull huge ones
+        toobigs = (torch.exp(self.scales).max(dim=-1).values > cull_scale_thresh).squeeze()
+        culls = culls | toobigs
+        # if self.step < self.config.stop_screen_size_at:
+        #     # cull big screen space
+        #     assert self.max_2Dsize is not None
+        #     culls = culls | (self.max_2Dsize > self.config.cull_screen_size).squeeze()
+            
+        self.means = Parameter(self.means[~culls].detach())
+        self.scales = Parameter(self.scales[~culls].detach())
+        self.quats = Parameter(self.quats[~culls].detach())
+        self.colors_all = Parameter(self.colors_all[~culls].detach())
+        self.opacities = Parameter(self.opacities[~culls].detach())
+        self.clip_embeds = Parameter(self.clip_embeds[~culls].detach())
+
+        print(f"Culled {n_bef - self.num_points} gaussians")
+        return culls
+
     def split_gaussians(self, split_mask, samps):
         """
         This function splits gaussians that are too large
@@ -590,10 +616,13 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         new_colors_all = self.colors_all[split_mask].repeat(samps, 1, 1)
         # step 3, sample new opacities
         new_opacities = self.opacities[split_mask].repeat(samps, 1)
+        
         # step 4, sample new scales
         size_fac = 1.6
         new_scales = torch.log(torch.exp(self.scales[split_mask]) / size_fac).repeat(samps, 1)
-        self.scales[split_mask] = torch.log(torch.exp(self.scales[split_mask]) / size_fac)
+        
+        if self.training:
+            self.scales[split_mask] = torch.log(torch.exp(self.scales[split_mask]) / size_fac)
         # step 5, sample new quats
         new_quats = self.quats[split_mask].repeat(samps, 1)
         # step 6, sample new CLIP embeddings
@@ -936,6 +965,7 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
             batch: ground truth batch corresponding to outputs
             metrics_dict: dictionary of metrics, some of which we can use for loss
         """
+        # Only consider RGB
         # Dimensionality reduction on the CLIP embeddings
         clip_enc_inputs = batch["clip"].view(-1, self.clip_embeds_input_dim)
         
@@ -1012,6 +1042,7 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
 
         Args:
             camera: generates raybundle
+            compute_semantics: Option to compute the semantic information of the scene.
         """
         assert camera is not None, "must provide camera to gaussian model"
         self.set_crop(obb_box)

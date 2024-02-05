@@ -130,8 +130,9 @@ class GEMSPLATDataManager(FullImageDatamanager):  # pylint: disable=abstract-met
         if len(self.train_unseen_cameras) == 0:
             self.train_unseen_cameras = [i for i in range(len(self.train_dataset))]
 
+        # TODO: Add functionality for RGBA images
         data = deepcopy(self.cached_train[image_idx])
-        data["image"] = data["image"].to(self.device)
+        data["image"] = data["image"].to(self.device)[..., :3]
         
         # # CLIP embeddings
         data["clip"] = self.clip_interpolator(image_idx).to(self.device)
