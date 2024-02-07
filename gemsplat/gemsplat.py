@@ -196,14 +196,14 @@ class SemanticGaussianSplattingModelConfig(GaussianSplattingModelConfig):
     """threshold of ratio of gaussian max to min scale before applying regularization
     loss from the PhysGaussian paper
     """
-    clip_img_loss_weight: float = 1e-1
+    clip_img_loss_weight: float = 1e-0
     """weight for the CLIP-related term in the loss function."""
     clip_network_loss_weight: float = 1e-0
     """weight for the CLIP-related term in the loss function."""
     
     # MLP head
-    hidden_dim: int = 64
-    num_layers: int = 2
+    hidden_dim: int = 32
+    num_layers: int = 3
 
 
 class SemanticGaussianSplattingModel(GaussianSplattingModel):
@@ -308,9 +308,9 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         )
         
         # initialize Viewer
-        self.viewer_utils = ViewerUtils()
+        self.viewer_utils = ViewerUtils(self.image_encoder)
         
-        self.setup_gui()\
+        self.setup_gui()
 
     @property
     def colors(self):
@@ -327,10 +327,10 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         self.means = torch.nn.Parameter(torch.zeros(newp, 3, device=self.device))
         self.scales = torch.nn.Parameter(torch.zeros(newp, 3, device=self.device))
         self.quats = torch.nn.Parameter(torch.zeros(newp, 4, device=self.device))
-        self.opacities = torch.nn.Parameter(torch.zeros(newp, 1, device=self.device))\
+        self.opacities = torch.nn.Parameter(torch.zeros(newp, 1, device=self.device))
         
         # learned CLIP embeddings
-        self.clip_embeds = torch.nn.Parameter(torch.zeros(newp, self.clip_embeds_latent_dim, device=self.device))\
+        self.clip_embeds = torch.nn.Parameter(torch.zeros(newp, self.clip_embeds_latent_dim, device=self.device))
         
         self.colors_all = torch.nn.Parameter(
             torch.zeros(newp, num_sh_bases(self.config.sh_degree), 3, device=self.device)
@@ -712,11 +712,9 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
             # clip_features /= clip_features.norm(dim=-1, keepdim=True)
             
             clip_features = self.clip_decoder(clip_features.view(-1, self.clip_embeds_latent_dim)).view(*outputs["clip"].shape[:-1],
-                                                                                                        self.clip_embeds_input_dim).float()
-            clip_features /= clip_features.norm(dim=-1, keepdim=True)
+                                                                                                            self.clip_embeds_input_dim).float()
             
-            # if self.datamanager.clip_interpolator.aux_data is None:
-            #     clip_features /= clip_features.norm(dim=-1, keepdim=True) # if not PCA
+            clip_features /= clip_features.norm(dim=-1, keepdim=True)
 
             if self.viewer_utils.has_positives:
                 if self.viewer_utils.has_negatives:
@@ -754,13 +752,12 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
                 outputs["similarity_GUI"] = apply_colormap(similarity_clip,
                                                         ColormapOptions("turbo"))
 
-    
             if self.viewer_utils.has_positives and "rgb" in outputs.keys():
                 # composited similarity
                 p_i = torch.clip(outputs["similarity"] - 0.5, 0, 1)
                 
                 outputs["composited_similarity"] = apply_colormap(p_i / (p_i.max() + 1e-6), ColormapOptions("turbo"))
-                mask = (outputs["similarity"] < 0.51).squeeze()
+                mask = (outputs["similarity"] < 0.5).squeeze()
                 outputs["composited_similarity"][mask, :] = outputs["rgb"][mask, :]
             
         return outputs
@@ -875,7 +872,6 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
             rgbs = self.get_colors.squeeze()  # (N, 3)
             rgbs = torch.sigmoid(rgbs)
             
-        # start = time.perf_counter()
         rgb = RasterizeGaussians.apply(
             self.xys,
             depths,
@@ -888,8 +884,6 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
             W,
             background,
         )
-        
-        # print(f"time rendering img: {time.perf_counter() - start}")
         
         depth_im = None
         if not self.training:
@@ -974,14 +968,12 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         
         # reconstructed CLIP embeddings
         clip_recon = self.clip_decoder(clip_latent).view(*batch["clip"].shape[:-1], self.clip_embeds_input_dim).float()
-        clip_recon = torch.nn.functional.normalize(clip_recon, p=2.0)
-        
+
         # # reshape latent CLIP embeddings
         clip_latent = clip_latent.view(*batch["clip"].shape[:-1], self.clip_embeds_latent_dim).float()
         
         d = self._get_downscale_factor()
         
-        # start = time.perf_counter()
         if d > 1:
             newsize = [batch["image"].shape[0] // d, batch["image"].shape[1] // d]
             gt_img = TF.resize(batch["image"].permute(2, 0, 1), newsize, antialias=None).permute(1, 2, 0)
@@ -991,9 +983,9 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         if clip_latent.shape[:-1] != outputs["clip"].shape[:-1]:
             # CLIP Embeddings
             clip_latent_img = TF.resize(clip_latent.permute(2, 0, 1), outputs["clip"].shape[:-1],
-                                        interpolation=TF.InterpolationMode.BILINEAR,  # TF.InterpolationMode.NEAREST
+                                        interpolation=TF.InterpolationMode.BILINEAR,
                                         antialias=None).permute(1, 2, 0)
-        
+    
         # CLIP-related Loss
         # Encoder-Decoder Loss
         clip_network_loss = self.config.clip_network_loss_weight * torch.nn.functional.mse_loss(
@@ -1003,6 +995,7 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         clip_img_loss = self.config.clip_img_loss_weight * torch.nn.functional.mse_loss(
             outputs["clip"], clip_latent_img)
         
+        # RGB loss
         Ll1 = torch.abs(gt_img - outputs["rgb"]).mean()
         simloss = 1 - self.ssim(gt_img.permute(2, 0, 1)[None, ...], outputs["rgb"].permute(2, 0, 1)[None, ...])
         if self.step % 10 == 0:
@@ -1020,8 +1013,6 @@ class SemanticGaussianSplattingModel(GaussianSplattingModel):
         else:
             sh_reg = torch.tensor(0.0).to(self.device)
             scale_reg = torch.tensor(0.0).to(self.device)
-        
-        # print(f"time LOSS img: {time.perf_counter() - start}")
         
         # main loss
         main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \

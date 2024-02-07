@@ -5,10 +5,11 @@ import torch
 from nerfstudio.viewer.server.viewer_elements import *
 from nerfstudio.utils.rich_utils import CONSOLE
 from functools import cached_property
-
+from gemsplat.encoders.image_encoder import BaseImageEncoder
 
 @dataclass
 class ViewerUtils:
+    image_encoder: BaseImageEncoder
     pca_proj: Optional[torch.Tensor] = None
     low_rank_min: Optional[torch.Tensor] = None
     low_rank_max: Optional[torch.Tensor] = None
@@ -25,7 +26,7 @@ class ViewerUtils:
         from gemsplat.encoders.maskclip_encoder import MaskCLIPNetworkConfig
 
         model, _ = load(MaskCLIPNetworkConfig.clip_model_type, device=self.device)
-        model, _ = load("RN50x64", device=self.device)
+        model, _ = load(self.image_encoder.config.clip_model_type, device=self.device)
                 
         model.eval()
         return model
@@ -49,28 +50,12 @@ class ViewerUtils:
             embed = embed.mean(dim=0, keepdim=True)
             embed /= embed.norm(dim=-1, keepdim=True)
             
-            self.pos_embed = self.proj_embeds(embed)
+            self.pos_embed = embed
         else:
             self.negatives = texts
             # We don't average the negatives as we compute pair-wise softmax
             embed /= embed.norm(dim=-1, keepdim=True)
-            self.neg_embed = self.proj_embeds(embed)
-            
-    def proj_embeds(self, embed: torch.Tensor) -> torch.Tensor:
-        # if self.pca_proj is not None and self.low_rank_min is not None and self.low_rank_max is not None:
-        #     # perform projection on embeddings using the PCA projection matrix
-        #     embed_flat = embed.reshape(-1, embed.shape[-1])
-        #     embed_flat = embed_flat @ self.pca_proj
-            
-        #     # low_rank_min = torch.quantile(embed_flat, 0.01, dim=0)
-        #     # low_rank_max = torch.quantile(embed_flat, 0.99, dim=0)
-            
-        #     embed_flat = (embed_flat - self.low_rank_min) / (self.low_rank_max - self.low_rank_min)
-        #     embed_flat = torch.clamp(embed_flat, 0, 1)
-
-        #     embed = embed_flat.reshape(embed.shape[:-1] + (3,))
-        
-        return embed          
+            self.neg_embed = embed    
 
     @property
     def has_positives(self) -> bool:
