@@ -57,10 +57,10 @@ from PIL import Image
 import pdb
 
 @dataclass
-class GEMSPLATDataManagerConfig(FullImageDatamanagerConfig):
-    _target: Type = field(default_factory=lambda: GEMSPLATDataManager)
+class GemSplatDataManagerConfig(FullImageDatamanagerConfig):
+    _target: Type = field(default_factory=lambda: GemSplatDataManager)
 
-class GEMSPLATDataManager(FullImageDatamanager):  # pylint: disable=abstract-method
+class GemSplatDataManager(FullImageDatamanager):  # pylint: disable=abstract-method
     """Basic stored data manager implementation.
 
     This is pretty much a port over from our old dataloading utilities, and is a little jank
@@ -73,11 +73,11 @@ class GEMSPLATDataManager(FullImageDatamanager):  # pylint: disable=abstract-met
         config: the DataManagerConfig used to instantiate class
     """
 
-    config: GEMSPLATDataManagerConfig
+    config: GemSplatDataManagerConfig
 
     def __init__(
         self,
-        config: GEMSPLATDataManagerConfig,
+        config: GemSplatDataManagerConfig,
         device: Union[torch.device, str] = "cuda:0",
         test_mode: Literal["test", "val", "inference"] = "val",
         world_size: int = 1,
@@ -96,7 +96,7 @@ class GEMSPLATDataManager(FullImageDatamanager):  # pylint: disable=abstract-met
         images = [self.train_dataset[i]["image"].permute(2, 0, 1)[None, ...] for i in range(len(self.train_dataset))]
         images = torch.cat(images)
     
-        # path to GEMSPLAT
+        # path to GemSplat
         parent_path = Path(__file__).parent.parent.parent.parent.resolve()
 
         cache_dir = f"{parent_path}/outputs/{self.config.dataparser.data.name}/dataloader"

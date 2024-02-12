@@ -1,18 +1,19 @@
 """
-GEMSPLAT configuration file.
+GemSplat configuration file.
 """
 
 from nerfstudio.cameras.camera_optimizers import CameraOptimizerConfig
 from nerfstudio.configs.base_config import ViewerConfig
 from nerfstudio.data.dataparsers.colmap_dataparser import ColmapDataParserConfig
+from nerfstudio.data.dataparsers.nerfstudio_dataparser import NerfstudioDataParserConfig
 from nerfstudio.engine.optimizers import AdamOptimizerConfig, RAdamOptimizerConfig
 from nerfstudio.engine.schedulers import ExponentialDecaySchedulerConfig
 from nerfstudio.engine.trainer import TrainerConfig
 from nerfstudio.plugins.types import MethodSpecification
 
-from gemsplat.data.gemsplat_datamanager import GEMSPLATDataManagerConfig
-from gemsplat.gemsplat import SemanticGaussianSplattingModelConfig
-from gemsplat.gemsplat_pipeline import GEMSPLATPipelineConfig
+from gemsplat.data.gemsplat_datamanager import GemSplatDataManagerConfig
+from gemsplat.gemsplat import GemSplatModelConfig
+from gemsplat.gemsplat_pipeline import GemSplatPipelineConfig
 
 from gemsplat.encoders.maskclip_encoder import MaskCLIPNetworkConfig
 
@@ -20,20 +21,18 @@ gemsplat_method = MethodSpecification(
     config=TrainerConfig(
         method_name="gemsplat",
         steps_per_eval_image=100,
-        steps_per_eval_batch=100,
+        steps_per_eval_batch=0,
         steps_per_save=2000,
         steps_per_eval_all_images=1000,
         max_num_iterations=30000,
         mixed_precision=False,
-        gradient_accumulation_steps={"camera_opt": 100, "color": 2},
-        
-        pipeline=GEMSPLATPipelineConfig(
-            datamanager=GEMSPLATDataManagerConfig(
-                dataparser=ColmapDataParserConfig(load_3D_points=True,
-                )
+        gradient_accumulation_steps={"camera_opt": 100},
+        pipeline=GemSplatPipelineConfig(
+            datamanager=GemSplatDataManagerConfig(
+                dataparser=NerfstudioDataParserConfig(load_3D_points=True),
+                cache_images_type="uint8",
             ),
-            model=SemanticGaussianSplattingModelConfig(
-            ),
+            model=GemSplatModelConfig(),
             #  You can swap the type of input encoder by specifying different clip_model_types, e.g., "RN50x64," "ViT-B/16."
             network=MaskCLIPNetworkConfig(
                 clip_model_type="RN50x64", clip_n_dims=512
@@ -47,12 +46,13 @@ gemsplat_method = MethodSpecification(
                     max_steps=30000,
                 ),
             },
-            "color": {
-                "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-15),
-                "scheduler": ExponentialDecaySchedulerConfig(
-                    lr_final=1e-4,
-                    max_steps=30000,
-                ),
+            "features_dc": {
+                "optimizer": AdamOptimizerConfig(lr=0.0025, eps=1e-15),
+                "scheduler": None,
+            },
+            "features_rest": {
+                "optimizer": AdamOptimizerConfig(lr=0.0025 / 20, eps=1e-15),
+                "scheduler": None,
             },
             "opacity": {
                 "optimizer": AdamOptimizerConfig(lr=0.05, eps=1e-15),
@@ -60,7 +60,7 @@ gemsplat_method = MethodSpecification(
             },
             "scaling": {
                 "optimizer": AdamOptimizerConfig(lr=0.005, eps=1e-15),
-                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-3, max_steps=30000),
+                "scheduler": None,
             },
             "rotation": {"optimizer": AdamOptimizerConfig(lr=0.001, eps=1e-15), "scheduler": None},
             "camera_opt": {
@@ -84,7 +84,7 @@ gemsplat_method = MethodSpecification(
             },
         },
         viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
-        vis="viewer", #"viewer_beta",
+        vis="viewer",
     ),
-    description="Config for GEMSPLAT",
+    description="Config for GemSplat",
 )

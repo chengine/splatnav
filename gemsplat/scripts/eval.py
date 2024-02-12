@@ -7,7 +7,7 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union, Tuple
 
 from typing_extensions import Annotated
 import pickle
@@ -24,7 +24,7 @@ import open3d as o3d
 from nerfstudio.cameras.cameras import Cameras, CameraType, RayBundle
 from nerfstudio.utils.eval_utils import eval_setup
 from nerfstudio.models.nerfacto import NerfactoModel
-from nerfstudio.models.gaussian_splatting import GaussianSplattingModel
+from nerfstudio.models.splatfacto import SplatfactoModel
 
 # %%
 # # # # #
@@ -95,7 +95,7 @@ class NeRF():
     
     def get_images(self):
         # images
-        images = [self.dataset.get_image(image_idx)
+        images = [self.dataset.get_image_float32(image_idx)
                   for image_idx 
                   in range(len(self.dataset._dataparser_outputs.image_filenames))]
         
@@ -104,9 +104,9 @@ class NeRF():
     def get_camera_intrinsics(self):
         K = self.cameras[0].get_intrinsics_matrices()
         # width and height
-        W = self.cameras[0].width
-        H = self.cameras[0].height
-        return H.item(), W.item(), K
+        W = self.cameras[0].width.item()
+        H = self.cameras[0].height.item()
+        return H, W, K
 
     def render(self, pose, debug_mode=False):
         # Render from a single pose
@@ -139,7 +139,7 @@ class NeRF():
 
             # insert ray bundles
             outputs['ray_bundle'] = camera_ray_bundle
-        elif isinstance(self.pipeline.model, GaussianSplattingModel):
+        elif isinstance(self.pipeline.model, SplatfactoModel):
             obb_box = None
             
             tnow = time.perf_counter()
@@ -151,27 +151,61 @@ class NeRF():
 
         return outputs
     
-    def generate_point_cloud(self)->None:
+    def generate_point_cloud(self,
+                             use_bounding_box: bool = False,
+                             bounding_box_min: Optional[Tuple[float, float, float]] = (-1, -1, -1),
+                             bounding_box_max: Optional[Tuple[float, float, float]] = (1, 1, 1),
+                             )->None:
         # 3D points
         pcd_points = self.pipeline.model.means
 
         # colors computed from the term of order 0 in the Spherical Harmonic basis
         # coefficient of the order 0th-term in the Spherical Harmonics basis
-        pcd_colors_coeff = self.pipeline.model.colors_all[:, 0:1, :]
+        pcd_colors_coeff = self.pipeline.model.features_dc
+            
+        # other attributes of the Gaussian
+        opacities, scales, quats, clip_embeds \
+            = self.pipeline.model.opacities, self.pipeline.model.scales, self.pipeline.model.quats, \
+                self.pipeline.model.clip_embeds
+
 
         # color computed from the Spherical Harmonics
         pcd_colors = SH2RGB(pcd_colors_coeff).squeeze()
+        
+        # mask points using a bounding box
+        if use_bounding_box:
+            mask = ((pcd_points[:, 0] > bounding_box_min[0]) & (pcd_points[:, 0] < bounding_box_max[0])
+                    & (pcd_points[:, 1] > bounding_box_min[1]) & (pcd_points[:, 1] < bounding_box_max[1])
+                    & (pcd_points[:, 2] > bounding_box_min[2]) & (pcd_points[:, 2] < bounding_box_max[2])
+            )
+            
+            pcd_points = pcd_points[mask]
+            pcd_colors = pcd_colors[mask]
+            
+            # other attributes of the Gaussian
+            opacities, scales, quats, clip_embeds \
+                = opacities[mask], scales, quats[mask], clip_embeds[mask]
+        else:
+            mask = None
+
+        # enviromment attributes
+        env_attr = {'means': pcd_points,
+                    'quats': quats,
+                    'scales': scales,
+                    'opacities': opacities,
+                    'clip_embeds': clip_embeds}
 
         # create the point cloud
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pcd_points.double().cpu().detach().numpy())
         pcd.colors = o3d.utility.Vector3dVector(pcd_colors.double().cpu().detach().numpy())
 
-        return pcd
+        return pcd, mask, env_attr
     
     def get_semantic_point_cloud(self,
                                  positives: str = "",
-                                 negatives: str = "object, things, stuff, texture"):
+                                 negatives: str = "object, things, stuff, texture",
+                                 pcd_attr: Dict[str, torch.Tensor] = {}):
         # update the list of positives (objects)
         self.pipeline.model.viewer_utils.handle_language_queries(raw_text=positives,
                                                                  is_positive=True)
@@ -182,10 +216,13 @@ class NeRF():
         
         # semantic point cloud
         # CLIP features
-        pcd_clip = self.pipeline.model.clip_embeds
+        if 'clip_embeds' in pcd_attr.keys():
+            pcd_clip = pcd_attr['clip_embeds']
+        else:
+            pcd_clip = self.pipeline.model.clip_embeds
         
         # get the semantic outputs
-        pcd_clip = {'clip': pcd_clip}
+        pcd_clip = {'clip': pcd_clip, }
         semantic_pcd = self.pipeline.model.get_semantic_outputs(pcd_clip)
         
         return semantic_pcd
@@ -195,18 +232,20 @@ class NeRF():
                                  display_image: bool=True,
                                  save_image: bool=False,
                                  filename: Optional[str]='/',
-                                 enable_semantics: bool=False,
+                                 compute_semantics: Optional[bool] = False,
+                                 max_depth: Optional[float] = 1.0,
+                                 return_pcd: Optional[bool] = True,
                                  positives: str = "",
                                  negatives: str = "object, things, stuff, texture"):
         # update the semantic-query information
-        if enable_semantics:
+        if compute_semantics:
             # update the list of positives (objects)
             self.pipeline.model.viewer_utils.handle_language_queries(raw_text=positives,
-                                                                    is_positive=True)
+                                                                     is_positive=True)
             
             # update the list of positives (objects)
             self.pipeline.model.viewer_utils.handle_language_queries(raw_text=negatives,
-                                                                    is_positive=False)
+                                                                     is_positive=False)
             
         # pose to render from
         pose = pose.to(self.device)
@@ -239,6 +278,12 @@ class NeRF():
         cam_depth = outputs['depth'].squeeze()
         cam_rgb = outputs['rgb']
         
+        # depth mask
+        if max_depth is None:
+            depth_mask = torch.ones_like(cam_depth, dtype=bool, device=cam_depth.device)
+        else:
+            depth_mask = cam_depth < max_depth 
+        
         # camera intrinsics
         H, W, K = nerf.get_camera_intrinsics()
 
@@ -256,11 +301,17 @@ class NeRF():
 
         # point cloud
         cam_pcd_points = torch.stack((cam_pts_x, cam_pts_y, cam_depth), axis=-1)
-        cam_pcd = o3d.geometry.PointCloud()
-        cam_pcd.points = o3d.utility.Vector3dVector(cam_pcd_points.view(-1, 3).double().cpu().detach().numpy())
-        cam_pcd.colors = o3d.utility.Vector3dVector(cam_rgb.view(-1, 3).double().cpu().detach().numpy())
+        
+        if return_pcd:
+            # point cloud
+            cam_pcd = o3d.geometry.PointCloud()
+            cam_pcd.points = o3d.utility.Vector3dVector(cam_pcd_points[depth_mask, ...].view(-1, 3).double().cpu().detach().numpy())
+            cam_pcd.colors = o3d.utility.Vector3dVector(cam_rgb[depth_mask, ...].view(-1, 3).double().cpu().detach().numpy())
             
-        return cam_rgb, cam_pcd_points, cam_pcd, outputs
+        else:
+            cam_pcd = None
+            
+        return cam_rgb, cam_pcd_points, cam_pcd, depth_mask, outputs
 # %%
 
 # # # # #
@@ -273,7 +324,6 @@ gaussian_splatting = True
 if gaussian_splatting:
     # Gaussian Splatting
     config_path = Path(f"Enter the path to your config file.")
-    
 else:
     # Nerfacto
     config_path = Path(f"<Enter the path to your config file.>")
@@ -306,7 +356,7 @@ poses = nerf.get_poses()
 eval_imgs = nerf.get_images()
 
 # generate the point cloud of the environment
-env_pcd = nerf.generate_point_cloud()
+env_pcd, env_pcd_mask, env_attr = nerf.generate_point_cloud(use_bounding_box=True)
 
 if enable_visualization_pcd:
     # visualize point cloud
@@ -340,7 +390,9 @@ if camera_semantic_pcd:
     semantic_info = cam_out
 else:   
     # get the semantic outputs
-    semantic_info = nerf.get_semantic_point_cloud(positives=positives, negatives=negatives)
+    semantic_info = nerf.get_semantic_point_cloud(positives=positives,
+                                                  negatives=negatives,
+                                                  pcd_attr=env_attr)
     
     # initial point cloud for semantic-conditioning
     gem_pcd = env_pcd
@@ -350,10 +402,14 @@ else:
 # # # 
 
 # threshold for masking the point cloud
-threshold_mask = 0.515
+threshold_mask = 0.88
+
+# scaled similarity
+sc_sim = torch.clip(semantic_info["similarity"] - 0.5, 0, 1)
+sc_sim = sc_sim / (sc_sim.max() + 1e-6)
 
 # mask
-similarity_mask = (semantic_info['similarity'].cpu().numpy() > threshold_mask).squeeze().reshape(-1,)
+similarity_mask = (sc_sim > threshold_mask).squeeze().reshape(-1,).cpu().numpy()
 
 # masked point cloud
 masked_pcd_pts = np.asarray(gem_pcd.points)[similarity_mask, ...]

@@ -25,7 +25,6 @@ class ViewerUtils:
         from gemsplat.clip.clip import load
         from gemsplat.encoders.maskclip_encoder import MaskCLIPNetworkConfig
 
-        model, _ = load(MaskCLIPNetworkConfig.clip_model_type, device=self.device)
         model, _ = load(self.image_encoder.config.clip_model_type, device=self.device)
                 
         model.eval()

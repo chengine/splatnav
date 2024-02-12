@@ -14,31 +14,31 @@ from nerfstudio.pipelines.base_pipeline import (
 )
 
 from gemsplat.data.gemsplat_datamanager import (
-    GEMSPLATDataManager,
-    GEMSPLATDataManagerConfig,
+    GemSplatDataManager,
+    GemSplatDataManagerConfig,
 )
-from gemsplat.gemsplat import SemanticGaussianSplattingModel, SemanticGaussianSplattingModelConfig
+from gemsplat.gemsplat import GemSplatModel, GemSplatModelConfig
 from gemsplat.encoders.image_encoder import BaseImageEncoderConfig, BaseImageEncoder
 
 
 @dataclass
-class GEMSPLATPipelineConfig(VanillaPipelineConfig):
+class GemSplatPipelineConfig(VanillaPipelineConfig):
     """Configuration for pipeline instantiation"""
 
-    _target: Type = field(default_factory=lambda: GEMSPLATPipeline)
+    _target: Type = field(default_factory=lambda: GemSplatPipeline)
     """target class to instantiate"""
-    datamanager: GEMSPLATDataManagerConfig = GEMSPLATDataManagerConfig()
+    datamanager: GemSplatDataManagerConfig = GemSplatDataManagerConfig()
     """specifies the datamanager config"""
-    model: ModelConfig = SemanticGaussianSplattingModelConfig()
+    model: ModelConfig = GemSplatModelConfig()
     """specifies the model config"""
     network: BaseImageEncoderConfig = BaseImageEncoderConfig()
     """specifies the vision-language network config"""
 
 
-class GEMSPLATPipeline(VanillaPipeline):
+class GemSplatPipeline(VanillaPipeline):
     def __init__(
         self,
-        config: GEMSPLATPipelineConfig,
+        config: GemSplatPipelineConfig,
         device: str,
         test_mode: Literal["test", "val", "inference"] = "val",
         world_size: int = 1,
@@ -51,7 +51,7 @@ class GEMSPLATPipeline(VanillaPipeline):
 
         self.image_encoder: BaseImageEncoder = config.network.setup()
 
-        self.datamanager: GEMSPLATDataManager = config.datamanager.setup(
+        self.datamanager: GemSplatDataManager = config.datamanager.setup(
             device=device,
             test_mode=test_mode,
             world_size=world_size,
@@ -86,5 +86,5 @@ class GEMSPLATPipeline(VanillaPipeline):
 
         self.world_size = world_size
         if world_size > 1:
-            self._model = typing.cast(SemanticGaussianSplattingModel, DDP(self._model, device_ids=[local_rank], find_unused_parameters=True))
+            self._model = typing.cast(GemSplatModel, DDP(self._model, device_ids=[local_rank], find_unused_parameters=True))
             dist.barrier(device_ids=[local_rank])
