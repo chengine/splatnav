@@ -24,7 +24,7 @@ gemsplat_method = MethodSpecification(
         steps_per_eval_batch=0,
         steps_per_save=2000,
         steps_per_eval_all_images=1000,
-        max_num_iterations=30000,
+        max_num_iterations=60000,
         mixed_precision=False,
         gradient_accumulation_steps={"camera_opt": 100},
         pipeline=GemSplatPipelineConfig(
@@ -71,16 +71,16 @@ gemsplat_method = MethodSpecification(
                 "optimizer": RAdamOptimizerConfig(lr=1e-2, eps=1e-15, weight_decay=1e-9),
                 "scheduler": ExponentialDecaySchedulerConfig(
                     lr_final=1e-3,
-                    max_steps=30000,
+                    max_steps=40000,
                 ),
             },
             "clip_encoder": {
                 "optimizer": RAdamOptimizerConfig(lr=1e-2, eps=1e-15, weight_decay=1e-9),
-                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-3, max_steps=30000),
+                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-3, max_steps=40000),
             },
             "clip_decoder": {
                 "optimizer": RAdamOptimizerConfig(lr=1e-2, eps=1e-15, weight_decay=1e-9),
-                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-3, max_steps=30000),
+                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-3, max_steps=40000),
             },
         },
         viewer=ViewerConfig(num_rays_per_chunk=1 << 15),

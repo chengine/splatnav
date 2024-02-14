@@ -118,6 +118,41 @@ def projection_matrix(znear, zfar, fovx, fovy, device: Union[str, torch.device] 
         ],
         device=device,
     )
+    
+ 
+class Autoencoder(torch.nn.Module):
+    '''
+    Autoencoder Class
+    '''
+    def __init__(self, input_dim, latent_dim, layer_sizes=None):
+        super(Autoencoder, self).__init__()
+        
+        # encoder
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(input_dim, 512),
+            torch.nn.ReLU(),
+            torch.nn.Linear(512, 32),
+            torch.nn.ReLU(),
+            torch.nn.Linear(32, latent_dim)
+        )
+        
+        # decoder
+        self.decoder = torch.nn.Sequential(
+            torch.nn.Linear(latent_dim, 32),
+            torch.nn.ReLU(),
+            torch.nn.Linear(32, 512),
+            torch.nn.ReLU(),
+            torch.nn.Linear(512, input_dim)
+        )
+        
+    def forward(self, x):
+        # encode inputs
+        x = self.encoder(x)
+        
+        # decode latent inputs
+        x = self.decoder(x)
+        
+        return x    
 
 
 @dataclass
@@ -181,6 +216,8 @@ class GemSplatModelConfig(SplatfactoModelConfig):
     """If True, output semantic-scene information during training. Otherwise, only output semantic-scene information during evaluation."""
     clip_img_loss_weight: float = 1e-1
     """weight for the CLIP-related term in the loss function."""
+    clip_network_cosine_sim_loss_weight: float = 5e-0
+    """cosine-similarity weight for the CLIP-related term in the loss function."""
     clip_network_loss_weight: float = 1e-0
     """weight for the CLIP-related term in the loss function."""
     
@@ -261,31 +298,42 @@ class GemSplatModel(SplatfactoModel):
         self.clip_background = torch.zeros(3, device=self.kwargs["device"])
         
         # Encoder-Decoder Network for the CLIP Embeddings
-        # Encoder
-        self.clip_encoder = tcnn.Network(
-            n_input_dims=self.clip_embeds_input_dim,
-            n_output_dims=self.clip_embeds_latent_dim,
-            network_config={
-                "otype": "CutlassMLP", # "FullyFusedMLP",
-                "activation": "ReLU",
-                "output_activation": "None",
-                "n_neurons": self.config.hidden_dim,
-                "n_hidden_layers": self.config.num_layers,
-            },
-        )
+        # # Encoder
+        # self.clip_encoder = tcnn.Network(
+        #     n_input_dims=self.clip_embeds_input_dim,
+        #     n_output_dims=self.clip_embeds_latent_dim,
+        #     network_config={
+        #         "otype": "CutlassMLP", # "FullyFusedMLP",
+        #         "activation": "ReLU",
+        #         "output_activation": "None",
+        #         "n_neurons": self.config.hidden_dim,
+        #         "n_hidden_layers": self.config.num_layers,
+        #     },
+        # )
         
-        # Decoder
-        self.clip_decoder = tcnn.Network(
-            n_input_dims=self.clip_embeds_latent_dim,
-            n_output_dims=self.clip_embeds_input_dim,
-            network_config={
-                "otype": "CutlassMLP", # "FullyFusedMLP",
-                "activation": "ReLU",
-                "output_activation": "None",
-                "n_neurons": self.config.hidden_dim,
-                "n_hidden_layers": self.config.num_layers,
-            },
-        )
+        # # Decoder
+        # self.clip_decoder = tcnn.Network(
+        #     n_input_dims=self.clip_embeds_latent_dim,
+        #     n_output_dims=self.clip_embeds_input_dim,
+        #     network_config={
+        #         "otype": "CutlassMLP", # "FullyFusedMLP",
+        #         "activation": "ReLU",
+        #         "output_activation": "None",
+        #         "n_neurons": self.config.hidden_dim,
+        #         "n_hidden_layers": self.config.num_layers,
+        #     },
+        # )
+        
+        # Autoencoder
+        self.autoencoder = Autoencoder(input_dim=self.clip_embeds_input_dim,
+                                       latent_dim=self.clip_embeds_latent_dim)
+        
+        self.clip_encoder = self.autoencoder.encoder
+        self.clip_decoder = self.autoencoder.decoder
+        
+        # max iterations
+        self.scene_train_max_iter: int = 30000
+        
         
         # metrics
         from torchmetrics.image import PeakSignalNoiseRatio
@@ -444,6 +492,11 @@ class GemSplatModel(SplatfactoModel):
         # to save some training time, we no longer need to update those stats post refinement
         if self.step >= self.config.stop_split_at:
             return
+        
+        # TODO:
+        if self.step >= self.scene_train_max_iter:
+            return
+        
         with torch.no_grad():
             # keep track of a moving average of grad norms
             visible_mask = (self.radii > 0).flatten()
@@ -478,6 +531,11 @@ class GemSplatModel(SplatfactoModel):
         assert step == self.step
         if self.step <= self.config.warmup_length:
             return
+        
+        # TODO:
+        if self.step >= self.scene_train_max_iter:
+            return
+        
         with torch.no_grad():
             # Offset all the opacity reset logic by refine_every so that we don't
             # save checkpoints right when the opacity is reset (saves every 2k)
@@ -932,7 +990,9 @@ class GemSplatModel(SplatfactoModel):
 
         # Important to allow xys grads to populate properly
         if self.training:
-            self.xys.retain_grad()
+            # TODO
+            if self.means.requires_grad:
+                self.xys.retain_grad()
 
         if self.config.sh_degree > 0:
             viewdirs = means_crop.detach() - camera.camera_to_worlds.detach()[..., :3, 3]  # (N, 3)
@@ -1089,6 +1149,12 @@ class GemSplatModel(SplatfactoModel):
         clip_img_loss = self.config.clip_img_loss_weight * torch.nn.functional.mse_loss(
             outputs["clip"], clip_latent_img)
         
+        # Cosine Similarity
+        clip_cosine_sim_loss = self.config.clip_network_cosine_sim_loss_weight * (1 - torch.nn.functional.cosine_similarity(
+            clip_recon, batch["clip"], dim=-1
+            )
+        ).mean()
+        
         # RGB-related loss
         Ll1 = torch.abs(gt_img - pred_img).mean()
         simloss = 1 - self.ssim(gt_img.permute(2, 0, 1)[None, ...], pred_img.permute(2, 0, 1)[None, ...])
@@ -1104,11 +1170,38 @@ class GemSplatModel(SplatfactoModel):
             scale_reg = 0.1 * scale_reg.mean()
         else:
             scale_reg = torch.tensor(0.0).to(self.device)
-        
+            
         # main loss
-        main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
-            + clip_network_loss + clip_img_loss
+        if self.step == 0:
+            main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
+                + clip_network_loss + clip_img_loss + clip_cosine_sim_loss
+        elif self.step < self.scene_train_max_iter:
+            main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
+                + clip_network_loss + clip_cosine_sim_loss
+                
+            # freeze
+            self.clip_embeds.requires_grad_(False)
+        else:
+            main_loss = clip_img_loss 
+            
+            # unfreeze
+            self.clip_embeds.requires_grad_(True)
+                
+            # freeze
+            self.means.requires_grad_(False)
+            self.scales.requires_grad_(False)
+            self.quats.requires_grad_(False)
+            self.opacities.requires_grad_(False)
+            self.features_dc.requires_grad_(False)
+            self.features_rest.requires_grad_(False)
+            
+            tuple(self.clip_encoder.parameters())[0].requires_grad_(False)
+            tuple(self.clip_decoder.parameters())[0].requires_grad_(False)
+            
         
+        # main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
+        #     + clip_network_loss + clip_img_loss + clip_cosine_sim_loss
+                
         return {
             "main_loss": main_loss,
             "scale_reg": scale_reg,
