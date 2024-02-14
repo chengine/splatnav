@@ -120,39 +120,39 @@ def projection_matrix(znear, zfar, fovx, fovy, device: Union[str, torch.device] 
     )
     
  
-class Autoencoder(torch.nn.Module):
-    '''
-    Autoencoder Class
-    '''
-    def __init__(self, input_dim, latent_dim, layer_sizes=None):
-        super(Autoencoder, self).__init__()
+# class Autoencoder(torch.nn.Module):
+#     '''
+#     Autoencoder Class
+#     '''
+#     def __init__(self, input_dim, latent_dim, layer_sizes=None):
+#         super(Autoencoder, self).__init__()
         
-        # encoder
-        self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(input_dim, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 32),
-            torch.nn.ReLU(),
-            torch.nn.Linear(32, latent_dim)
-        )
+#         # encoder
+#         self.encoder = torch.nn.Sequential(
+#             torch.nn.Linear(input_dim, 512),
+#             torch.nn.ReLU(),
+#             torch.nn.Linear(512, 32),
+#             torch.nn.ReLU(),
+#             torch.nn.Linear(32, latent_dim)
+#         )
         
-        # decoder
-        self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(latent_dim, 32),
-            torch.nn.ReLU(),
-            torch.nn.Linear(32, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, input_dim)
-        )
+#         # decoder
+#         self.decoder = torch.nn.Sequential(
+#             torch.nn.Linear(latent_dim, 32),
+#             torch.nn.ReLU(),
+#             torch.nn.Linear(32, 512),
+#             torch.nn.ReLU(),
+#             torch.nn.Linear(512, input_dim)
+#         )
         
-    def forward(self, x):
-        # encode inputs
-        x = self.encoder(x)
+#     def forward(self, x):
+#         # encode inputs
+#         x = self.encoder(x)
         
-        # decode latent inputs
-        x = self.decoder(x)
+#         # decode latent inputs
+#         x = self.decoder(x)
         
-        return x    
+#         return x    
 
 
 @dataclass
@@ -298,38 +298,38 @@ class GemSplatModel(SplatfactoModel):
         self.clip_background = torch.zeros(3, device=self.kwargs["device"])
         
         # Encoder-Decoder Network for the CLIP Embeddings
-        # # Encoder
-        # self.clip_encoder = tcnn.Network(
-        #     n_input_dims=self.clip_embeds_input_dim,
-        #     n_output_dims=self.clip_embeds_latent_dim,
-        #     network_config={
-        #         "otype": "CutlassMLP", # "FullyFusedMLP",
-        #         "activation": "ReLU",
-        #         "output_activation": "None",
-        #         "n_neurons": self.config.hidden_dim,
-        #         "n_hidden_layers": self.config.num_layers,
-        #     },
-        # )
+        # Encoder
+        self.clip_encoder = tcnn.Network(
+            n_input_dims=self.clip_embeds_input_dim,
+            n_output_dims=self.clip_embeds_latent_dim,
+            network_config={
+                "otype": "CutlassMLP", # "FullyFusedMLP",
+                "activation": "ReLU",
+                "output_activation": "None",
+                "n_neurons": self.config.hidden_dim,
+                "n_hidden_layers": self.config.num_layers,
+            },
+        )
         
-        # # Decoder
-        # self.clip_decoder = tcnn.Network(
-        #     n_input_dims=self.clip_embeds_latent_dim,
-        #     n_output_dims=self.clip_embeds_input_dim,
-        #     network_config={
-        #         "otype": "CutlassMLP", # "FullyFusedMLP",
-        #         "activation": "ReLU",
-        #         "output_activation": "None",
-        #         "n_neurons": self.config.hidden_dim,
-        #         "n_hidden_layers": self.config.num_layers,
-        #     },
-        # )
+        # Decoder
+        self.clip_decoder = tcnn.Network(
+            n_input_dims=self.clip_embeds_latent_dim,
+            n_output_dims=self.clip_embeds_input_dim,
+            network_config={
+                "otype": "CutlassMLP", # "FullyFusedMLP",
+                "activation": "ReLU",
+                "output_activation": "None",
+                "n_neurons": self.config.hidden_dim,
+                "n_hidden_layers": self.config.num_layers,
+            },
+        )
         
-        # Autoencoder
-        self.autoencoder = Autoencoder(input_dim=self.clip_embeds_input_dim,
-                                       latent_dim=self.clip_embeds_latent_dim)
+        # # Autoencoder
+        # self.autoencoder = Autoencoder(input_dim=self.clip_embeds_input_dim,
+        #                                latent_dim=self.clip_embeds_latent_dim)
         
-        self.clip_encoder = self.autoencoder.encoder
-        self.clip_decoder = self.autoencoder.decoder
+        # self.clip_encoder = self.autoencoder.encoder
+        # self.clip_decoder = self.autoencoder.decoder
         
         # max iterations
         self.scene_train_max_iter: int = 30000
