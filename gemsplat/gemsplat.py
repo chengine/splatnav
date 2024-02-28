@@ -237,8 +237,8 @@ class GemSplatModelConfig(SplatfactoModelConfig):
     """weight for the CLIP-related term in the loss function."""
     
     # MLP head
-    hidden_dim: int = 128 # 32 128, 128
-    num_layers: int = 5 # 3  5, 12
+    hidden_dim: int = 128
+    num_layers: int = 5
 
 class GemSplatModel(SplatfactoModel):
     """Nerfstudio's implementation of Gaussian Splatting
@@ -340,6 +340,7 @@ class GemSplatModel(SplatfactoModel):
         )
         
         # # Autoencoder
+        # Alternative architecture
         # self.autoencoder = Autoencoder(input_dim=self.clip_embeds_input_dim,
         #                                latent_dim=self.clip_embeds_latent_dim)
         
@@ -347,9 +348,8 @@ class GemSplatModel(SplatfactoModel):
         # self.clip_decoder = self.autoencoder.decoder
         
         # max iterations
-        # TODO:
+        # TODO: Update
         self.scene_train_max_iter: int = 28000
-        
         
         # metrics
         from torchmetrics.image import PeakSignalNoiseRatio
@@ -372,21 +372,6 @@ class GemSplatModel(SplatfactoModel):
         self.viewer_utils = ViewerUtils(self.image_encoder)
         
         self.setup_gui()
-        
-        
-        
-        
-        from pathlib import Path
-        # directory
-        self.file_dir = Path("/home/ola/Research/Gaussian_Splatting/projects/test_data/")
-        
-        self.recon_loss = []
-        
-        # TODO:
-        self.clip_gt_data = torch.stack([self.datamanager.clip_interpolator.data[pose_idx].float().permute(2, 0, 1)
-             for pose_idx in range(185)], dim=0).permute(0, 2, 3, 1).reshape(-1, 1024)
-        
-        
 
     @property
     def colors(self):
@@ -1134,96 +1119,6 @@ class GemSplatModel(SplatfactoModel):
 
         metrics_dict["gaussian_count"] = self.num_points
         return metrics_dict
-
-    # def get_loss_dict(self, outputs, batch, metrics_dict=None) -> Dict[str, torch.Tensor]:
-    #     """Computes and returns the losses dict.
-
-    #     Args:
-    #         outputs: the output to compute loss dict to
-    #         batch: ground truth batch corresponding to outputs
-    #         metrics_dict: dictionary of metrics, some of which we can use for loss
-    #     """
-    #     gt_img = self.get_gt_img(batch["image"])
-    #     pred_img = outputs["rgb"]
-
-    #     # Set masked part of both ground-truth and rendered image to black.
-    #     # This is a little bit sketchy for the SSIM loss.
-    #     if "mask" in batch:
-    #         # batch["mask"] : [H, W, 1]
-    #         assert batch["mask"].shape[:2] == gt_img.shape[:2] == pred_img.shape[:2]
-    #         mask = batch["mask"].to(self.device)
-    #         gt_img = gt_img * mask
-    #         pred_img = pred_img * mask
-        
-    #     # Dimensionality reduction on the CLIP embeddings
-    #     clip_enc_inputs = batch["clip"].view(-1, self.clip_embeds_input_dim)
-        
-    #     # latent CLIP embeddings
-    #     clip_latent = self.clip_encoder(clip_enc_inputs)
-        
-    #     # reconstructed CLIP embeddings
-    #     clip_recon = self.clip_decoder(clip_latent).view(*batch["clip"].shape[:-1], self.clip_embeds_input_dim).float()
-        
-    #     # # reshape latent CLIP embeddings
-    #     clip_latent = clip_latent.view(*batch["clip"].shape[:-1], self.clip_embeds_latent_dim).float()
-
-    #     # Supervision in the Latent Space
-    #     if clip_latent.shape[:-1] != outputs["clip"].shape[:-1]:
-    #         # torchvision can be slow to import, so we do it lazily.
-    #         import torchvision.transforms.functional as TF
-            
-    #         # CLIP Embeddings
-    #         clip_latent_img = TF.resize(clip_latent.permute(2, 0, 1), outputs["clip"].shape[:-1],
-    #                                     interpolation=TF.InterpolationMode.BILINEAR,
-    #                                     antialias=None).permute(1, 2, 0)
-        
-    #     # Supervision in the Latent Space
-    #     clip_img_loss = self.config.clip_img_loss_weight * torch.nn.functional.mse_loss(
-    #         outputs["clip"], clip_latent_img) 
-        
-    #     # clip_img_loss = self.config.clip_img_loss_weight * (torch.nn.functional.mse_loss(
-    #     #     outputs["clip"], clip_latent_img) + (1 - torch.nn.functional.cosine_similarity(
-    #     #                                             outputs["clip"], clip_latent_img, dim=-1
-    #     #                                             )
-    #     #                                             ).mean()
-    #     # )
-            
-    #     # CLIP-related Loss
-    #     # Encoder-Decoder Loss
-    #     clip_network_loss = self.config.clip_network_loss_weight * torch.nn.functional.mse_loss(
-    #         clip_recon, batch["clip"])
-    
-    #     # Cosine Similarity
-    #     clip_cosine_sim_loss = self.config.clip_network_cosine_sim_loss_weight * (1 - torch.nn.functional.cosine_similarity(
-    #         clip_recon, batch["clip"], dim=-1
-    #         )
-    #     ).mean()
-    
-    #     # RGB-related loss
-    #     Ll1 = torch.abs(gt_img - pred_img).mean()
-    #     simloss = 1 - self.ssim(gt_img.permute(2, 0, 1)[None, ...], pred_img.permute(2, 0, 1)[None, ...])
-       
-    #     if self.config.use_scale_regularization and self.step % 10 == 0:
-    #         scale_exp = torch.exp(self.scales)
-    #         scale_reg = (
-    #             torch.maximum(
-    #                 scale_exp.amax(dim=-1) / scale_exp.amin(dim=-1),
-    #                 torch.tensor(self.config.max_gauss_ratio),
-    #             )
-    #             - self.config.max_gauss_ratio
-    #         )
-    #         scale_reg = 0.1 * scale_reg.mean()
-    #     else:
-    #         scale_reg = torch.tensor(0.0).to(self.device)
-            
-    #     # main loss
-    #     main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
-    #         + clip_network_loss + clip_img_loss + clip_cosine_sim_loss
-                
-    #     return {
-    #         "main_loss": main_loss,
-    #         "scale_reg": scale_reg,
-    #     }
         
     def get_loss_dict(self, outputs, batch, metrics_dict=None) -> Dict[str, torch.Tensor]:
         """Computes and returns the losses dict.
@@ -1233,21 +1128,6 @@ class GemSplatModel(SplatfactoModel):
             batch: ground truth batch corresponding to outputs
             metrics_dict: dictionary of metrics, some of which we can use for loss
         """
-        
-        # if self.step < self.scene_train_max_iter:
-        #     # Cache the error
-        #     pred_embeds = self.clip_encoder(self.clip_gt_data)
-        #     pred_embeds = self.clip_decoder(pred_embeds)
-
-        #     cache_loss = torch.nn.functional.mse_loss(self.clip_gt_data, pred_embeds)
-
-        #     self.recon_loss.append(cache_loss.item())
-            
-        #     if self.step % 1000 == 0:
-        #         np.save(file=f'{self.file_dir}/loss_clip_recon.npy',
-        #                 arr=self.recon_loss)
-                
-        
         gt_img = self.get_gt_img(batch["image"])
         pred_img = outputs["rgb"]
 
@@ -1334,7 +1214,6 @@ class GemSplatModel(SplatfactoModel):
         
             # freeze
             self.clip_embeds.requires_grad_(False)
-            # self.clip_embeds.grad = None
         else:
             main_loss = clip_img_loss 
             
@@ -1351,19 +1230,6 @@ class GemSplatModel(SplatfactoModel):
             
             tuple(self.clip_encoder.parameters())[0].requires_grad_(False)
             tuple(self.clip_decoder.parameters())[0].requires_grad_(False)
-  
-            # self.means.grad = None
-            # self.scales.grad = None
-            # self.quats.grad = None
-            # self.opacities.grad = None
-            # self.features_dc.grad = None
-            # self.features_rest.grad = None
-            
-            # tuple(self.clip_encoder.parameters())[0].grad = None
-            # tuple(self.clip_decoder.parameters())[0].grad = None
-  
-        # main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
-        #     + clip_network_loss + clip_img_loss + clip_cosine_sim_loss
                 
         return {
             "main_loss": main_loss,
