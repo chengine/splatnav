@@ -881,6 +881,9 @@ class GemSplatModel(SplatfactoModel):
                     
                     sims, _ = probs.min(dim=-1, keepdim=True)
                     outputs["similarity"] = sims.reshape((*pos_sims.shape[:-1], 1))
+                    
+                    # cosine similarity
+                    outputs["raw_similarity"] = raw_sims[..., :1]
                 else:
                     # positive embeddings
                     text_embs = self.viewer_utils.pos_embed
@@ -890,6 +893,9 @@ class GemSplatModel(SplatfactoModel):
                     if sims.shape[-1] > 1:
                         sims = sims.mean(dim=-1, keepdim=True)
                     outputs["similarity"] = sims
+                    
+                    # cosine similarity
+                    outputs["raw_similarity"] = sims
 
                 # for outputs similar to the GUI
                 similarity_clip = outputs[f"similarity"] - outputs[f"similarity"].min()
