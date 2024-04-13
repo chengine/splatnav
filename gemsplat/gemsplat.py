@@ -358,6 +358,7 @@ class GemSplatModel(SplatfactoModel):
         self.camera_optimizer: CameraOptimizer = self.config.camera_optimizer.setup(
             num_cameras=self.num_train_data, device="cpu"
         )
+        
         # max iterations
         # TODO: Update
         self.scene_train_max_iter: int = 28000
