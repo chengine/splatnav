@@ -359,10 +359,6 @@ class GemSplatModel(SplatfactoModel):
             num_cameras=self.num_train_data, device="cpu"
         )
         
-        # max iterations
-        # TODO: Update
-        self.scene_train_max_iter: int = 28000
-        
         # metrics
         from torchmetrics.image import PeakSignalNoiseRatio
         from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
@@ -552,10 +548,6 @@ class GemSplatModel(SplatfactoModel):
         if self.step >= self.config.stop_split_at:
             return
         
-        # TODO:
-        if self.step >= self.scene_train_max_iter:
-            return
-        
         with torch.no_grad():
             # keep track of a moving average of grad norms
             visible_mask = (self.radii > 0).flatten()
@@ -589,10 +581,6 @@ class GemSplatModel(SplatfactoModel):
     def refinement_after(self, optimizers: Optimizers, step):
         assert step == self.step
         if self.step <= self.config.warmup_length:
-            return
-        
-        # TODO:
-        if self.step >= self.scene_train_max_iter:
             return
         
         with torch.no_grad():
@@ -1008,7 +996,6 @@ class GemSplatModel(SplatfactoModel):
 
         # Important to allow xys grads to populate properly
         if self.training:
-            # TODO
             if self.means.requires_grad:
                 self.xys.retain_grad()
 
@@ -1161,50 +1148,44 @@ class GemSplatModel(SplatfactoModel):
         # latent CLIP embeddings
         clip_latent = self.clip_encoder(clip_enc_inputs)
         
-        if self.step < self.scene_train_max_iter:
-            # reconstructed CLIP embeddings
-            clip_recon = self.clip_decoder(clip_latent).view(*batch["clip"].shape[:-1], self.clip_embeds_input_dim).float()
+        # reconstructed CLIP embeddings
+        clip_recon = self.clip_decoder(clip_latent).view(*batch["clip"].shape[:-1], self.clip_embeds_input_dim).float()
         
         # # reshape latent CLIP embeddings
         clip_latent = clip_latent.view(*batch["clip"].shape[:-1], self.clip_embeds_latent_dim).float()
 
         # Supervision in the Latent Space
-        if self.step == 0 or self.step >= self.scene_train_max_iter:
-            if clip_latent.shape[:-1] != outputs["clip"].shape[:-1]:
-                # torchvision can be slow to import, so we do it lazily.
-                import torchvision.transforms.functional as TF
-                
-                # CLIP Embeddings
-                clip_latent_img = TF.resize(clip_latent.permute(2, 0, 1), outputs["clip"].shape[:-1],
-                                            interpolation=TF.InterpolationMode.BILINEAR,
-                                            antialias=None).permute(1, 2, 0)
-        
-            # Supervision in the Latent Space
-            clip_img_loss = self.config.clip_img_loss_weight * torch.nn.functional.mse_loss(
-                outputs["clip"], clip_latent_img)
+        if clip_latent.shape[:-1] != outputs["clip"].shape[:-1]:
+            # torchvision can be slow to import, so we do it lazily.
+            import torchvision.transforms.functional as TF
             
-            if self.step >= self.scene_train_max_iter:
-                clip_img_loss = clip_img_loss \
-                    + self.config.clip_img_loss_weight * (1 - torch.nn.functional.cosine_similarity(
-                                                    outputs["clip"], clip_latent_img, dim=-1
-                                                    )
-                                                    ).mean()
+            # CLIP Embeddings
+            clip_latent_img = TF.resize(clip_latent.permute(2, 0, 1), outputs["clip"].shape[:-1],
+                                        interpolation=TF.InterpolationMode.BILINEAR,
+                                        antialias=None).permute(1, 2, 0)
+    
+        # Supervision in the Latent Space
+        clip_img_loss = self.config.clip_img_loss_weight * torch.nn.functional.mse_loss(
+            outputs["clip"], clip_latent_img)\
+                + self.config.clip_img_loss_weight * (1 - torch.nn.functional.cosine_similarity(
+                                                outputs["clip"], clip_latent_img, dim=-1
+                                                )
+                                                ).mean()
             
         # CLIP-related Loss
-        if self.step < self.scene_train_max_iter:
-            # Encoder-Decoder Loss
-            clip_network_loss = self.config.clip_network_loss_weight * torch.nn.functional.mse_loss(
-                clip_recon, batch["clip"]) 
-        
-            # Cosine Similarity
-            clip_cosine_sim_loss = self.config.clip_network_cosine_sim_loss_weight * (1 - torch.nn.functional.cosine_similarity(
-                clip_recon, batch["clip"], dim=-1
-                )
-            ).mean()
-        
-            # RGB-related loss
-            Ll1 = torch.abs(gt_img - pred_img).mean()
-            simloss = 1 - self.ssim(gt_img.permute(2, 0, 1)[None, ...], pred_img.permute(2, 0, 1)[None, ...])
+        # Encoder-Decoder Loss
+        clip_network_loss = self.config.clip_network_loss_weight * torch.nn.functional.mse_loss(
+            clip_recon, batch["clip"]) 
+    
+        # Cosine Similarity
+        clip_cosine_sim_loss = self.config.clip_network_cosine_sim_loss_weight * (1 - torch.nn.functional.cosine_similarity(
+            clip_recon, batch["clip"], dim=-1
+            )
+        ).mean()
+    
+        # RGB-related loss
+        Ll1 = torch.abs(gt_img - pred_img).mean()
+        simloss = 1 - self.ssim(gt_img.permute(2, 0, 1)[None, ...], pred_img.permute(2, 0, 1)[None, ...])
        
         if self.config.use_scale_regularization and self.step % 10 == 0:
             scale_exp = torch.exp(self.scales)
@@ -1220,31 +1201,8 @@ class GemSplatModel(SplatfactoModel):
             scale_reg = torch.tensor(0.0).to(self.device)
             
         # main loss
-        if self.step == 0:
-            main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
-                + clip_network_loss + clip_img_loss + clip_cosine_sim_loss
-        elif self.step < self.scene_train_max_iter:
-            main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
-                + clip_network_loss + clip_cosine_sim_loss
-        
-            # freeze
-            self.clip_embeds.requires_grad_(False)
-        else:
-            main_loss = clip_img_loss 
-            
-            # unfreeze
-            self.clip_embeds.requires_grad_(True)
-                
-            # freeze
-            self.means.requires_grad_(False)
-            self.scales.requires_grad_(False)
-            self.quats.requires_grad_(False)
-            self.opacities.requires_grad_(False)
-            self.features_dc.requires_grad_(False)
-            self.features_rest.requires_grad_(False)
-            
-            tuple(self.clip_encoder.parameters())[0].requires_grad_(False)
-            tuple(self.clip_decoder.parameters())[0].requires_grad_(False)
+        main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
+            + clip_network_loss + clip_img_loss + clip_cosine_sim_loss
          
         loss_dict = {
             "main_loss": main_loss,
