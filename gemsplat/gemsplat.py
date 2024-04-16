@@ -991,8 +991,10 @@ class GemSplatModel(SplatfactoModel):
             rgb = background.repeat(H, W, 1)
             depth = background.new_ones(*rgb.shape[:2], 1) * 10
             accumulation = background.new_zeros(*rgb.shape[:2], 1)
+            clip = self.clip_background.repeat(H, W, 1)
 
-            return {"rgb": rgb, "depth": depth, "accumulation": accumulation, "background": background}
+            return {"rgb": rgb, "depth": depth, "clip": clip,
+                    "accumulation": accumulation, "background": background}
 
         # Important to allow xys grads to populate properly
         if self.training:
@@ -1141,7 +1143,7 @@ class GemSplatModel(SplatfactoModel):
             assert mask.shape[:2] == gt_img.shape[:2] == pred_img.shape[:2]
             gt_img = gt_img * mask
             pred_img = pred_img * mask
-        
+            
         # Dimensionality reduction on the CLIP embeddings
         clip_enc_inputs = batch["clip"].view(-1, self.clip_embeds_input_dim)
         
