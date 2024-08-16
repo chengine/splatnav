@@ -242,7 +242,7 @@ class GemSplatModelConfig(SplatfactoModelConfig):
     """threshold of ratio of gaussian max to min scale before applying regularization
     loss from the PhysGaussian paper
     """
-    output_depth_during_training: bool = False
+    output_depth_during_training: bool = True
     """If True, output depth during training. Otherwise, only output depth during evaluation."""
     rasterize_mode: Literal["classic", "antialiased"] = "classic"
     """
@@ -256,21 +256,37 @@ class GemSplatModelConfig(SplatfactoModelConfig):
     """
     camera_optimizer: CameraOptimizerConfig = field(default_factory=lambda: CameraOptimizerConfig(mode="off"))
     """Config of the camera optimizer to use"""
+    semantics_batch_size: int = 1
+    """The batch size for training the semantic field."""
     output_semantics_during_training: bool = False
     """If True, output semantic-scene information during training. Otherwise, only output semantic-scene information during evaluation."""
-    num_semantic_channels: int = 32
-    """dimension of the latent space for the semantic features. Nerfstudio (gsplat) supports up to 32 channels."""
-    clip_img_loss_weight: float = 1e-1
+    clip_img_loss_weight: float = 1e0
     """weight for the CLIP-related term in the loss function."""
-    clip_network_cosine_sim_loss_weight: float = 9e-0
-    """cosine-similarity weight for the CLIP-related term in the loss function."""
-    clip_network_loss_weight: float = 5e-0
-    """weight for the CLIP-related term in the loss function."""
-    
-    # MLP head
-    hidden_dim: int = 128
-    num_layers: int = 5
+    enable_sparsification: bool = False
+    """If true, utilizes a sparsity-inducing loss function."""
+    sparsity_weight_init: float = 0.0
+    """Initial weight for the sparsity-inducing term in the loss function."""
+    sparsity_weight_max: float = 2e-4
+    """Maximum value of the weight for the sparsity-inducing term in the loss function."""
+    sparsity_weight_increment_factor: float = 1 / 2000
+    """Increment factor of the weight for the sparsity-inducing term in the loss function."""
 
+    # MLP head
+    hidden_dim: int = 64
+    num_layers: int = 2
+    
+    # Positional encoding
+    use_pe: bool = True
+    pe_n_freq: int = 6
+    # Hash grid
+    num_levels: int = 12
+    log2_hashmap_size: int = 19
+    start_res: int = 16
+    max_res: int = 128
+    features_per_level: int = 8
+    hashgrid_layers: Tuple[int] = (12, 12)
+    hashgrid_resolutions: Tuple[Tuple[int]] = ((16, 128), (128, 512))
+    hashgrid_sizes: Tuple[int] = (19, 19)
 
 class GemSplatModel(SplatfactoModel):
     """Nerfstudio's implementation of Gaussian Splatting
@@ -299,9 +315,6 @@ class GemSplatModel(SplatfactoModel):
         
         # CLIP embeddings input dimension
         self.clip_embeds_input_dim = self.kwargs["metadata"]["feature_dim"]
-        
-        # CLIP embeddings latent dimension
-        self.clip_embeds_latent_dim = self.config.num_semantic_channels
         
         if self.seed_points is not None and not self.config.random_init:
             means = torch.nn.Parameter(self.seed_points[0])  # (Location, Color)
@@ -339,46 +352,44 @@ class GemSplatModel(SplatfactoModel):
 
         opacities = torch.nn.Parameter(torch.logit(0.1 * torch.ones(num_points, 1)))
         
-        # learned CLIP embeddings
-        clip_embeds = torch.nn.Parameter(torch.rand(num_points, self.clip_embeds_latent_dim))
-            
-        # background CLIP rendering
-        self.clip_background = torch.zeros(3, device=self.kwargs["device"])
-        
-        # Encoder-Decoder Network for the CLIP Embeddings
-        # Encoder
-        self.clip_encoder = tcnn.Network(
-            n_input_dims=self.clip_embeds_input_dim,
-            n_output_dims=self.clip_embeds_latent_dim,
-            network_config={
-                "otype": "CutlassMLP", # "FullyFusedMLP",
-                "activation": "ReLU",
-                "output_activation": "None",
-                "n_neurons": self.config.hidden_dim,
-                "n_hidden_layers": self.config.num_layers,
-            },
-        )
-        
-        # Decoder
-        self.clip_decoder = tcnn.Network(
-            n_input_dims=self.clip_embeds_latent_dim,
+        # Feature field has its own hash grid
+        growth_factor = np.exp((np.log(self.config.max_res) - np.log(self.config.start_res)) 
+                               / (self.config.num_levels - 1))
+        encoding_config = {
+            "otype": "Composite",
+            "nested": [
+                {
+                    "otype": "HashGrid",
+                    "n_levels": self.config.num_levels,
+                    "n_features_per_level": self.config.features_per_level,
+                    "log2_hashmap_size": self.config.log2_hashmap_size,
+                    "base_resolution": self.config.start_res,
+                    "per_level_scale": growth_factor,
+                }
+            ],
+        }
+
+        if self.config.use_pe:
+            encoding_config["nested"].append(
+                {
+                    "otype": "Frequency",
+                    "n_frequencies": self.config.pe_n_freq,
+                    "n_dims_to_encode": 3,
+                }
+            )
+
+        self.clip_field = tcnn.NetworkWithInputEncoding(
+            n_input_dims=3,
             n_output_dims=self.clip_embeds_input_dim,
+            encoding_config=encoding_config,
             network_config={
-                "otype": "CutlassMLP", # "FullyFusedMLP",
+                "otype": "FullyFusedMLP",
                 "activation": "ReLU",
                 "output_activation": "None",
                 "n_neurons": self.config.hidden_dim,
                 "n_hidden_layers": self.config.num_layers,
             },
         )
-        
-        # # Autoencoder
-        # Alternative architecture
-        # self.autoencoder = Autoencoder(input_dim=self.clip_embeds_input_dim,
-        #                                latent_dim=self.clip_embeds_latent_dim)
-        
-        # self.clip_encoder = self.autoencoder.encoder
-        # self.clip_decoder = self.autoencoder.decoder
         
         self.gauss_params = torch.nn.ParameterDict(
             {
@@ -387,8 +398,7 @@ class GemSplatModel(SplatfactoModel):
                 "quats": quats,
                 "features_dc": features_dc,
                 "features_rest": features_rest,
-                "opacities": opacities,
-                "clip_embeds": clip_embeds,
+                "opacities": opacities
             }
         )
 
@@ -412,7 +422,14 @@ class GemSplatModel(SplatfactoModel):
             )  # This color is the same as the default background color in Viser. This would only affect the background color when rendering.
         else:
             self.background_color = get_color(self.config.background_color)
+         
+        if self.config.enable_sparsification:
+            # the weight on the sparsity-inducing component in the loss function
+            self.sparsity_weight = self.config.sparsity_weight_init
             
+            # difference between the initial value and the maximum value of the wieght of the sparsity-inducing component
+            self.sparsity_weight_diff = self.config.sparsity_weight_max - self.config.sparsity_weight_init
+
         # initialize Viewer
         self.viewer_utils = ViewerUtils(self.image_encoder)
         
@@ -461,17 +478,13 @@ class GemSplatModel(SplatfactoModel):
     def opacities(self):
         return self.gauss_params["opacities"]
 
-    @property
-    def clip_embeds(self):
-        return self.gauss_params["clip_embeds"]
-
     def load_state_dict(self, dict, **kwargs):  # type: ignore
         # resize the parameters to match the new number of points
         self.step = 30000
         if "means" in dict:
             # For backwards compatibility, we remap the names of parameters from
             # means->gauss_params.means since old checkpoints have that format
-            for p in ["means", "scales", "quats", "features_dc", "features_rest", "opacities", "clip_embeds"]:
+            for p in ["means", "scales", "quats", "features_dc", "features_rest", "opacities"]:
                 dict[f"gauss_params.{p}"] = dict[p]
         newp = dict["gauss_params.means"].shape[0]
         for name, param in self.gauss_params.items():
@@ -758,8 +771,6 @@ class GemSplatModel(SplatfactoModel):
         self.scales[split_mask] = torch.log(torch.exp(self.scales[split_mask]) / size_fac)
         # step 5, sample new quats
         new_quats = self.quats[split_mask].repeat(samps, 1)
-        # step 6, sample new CLIP embeddings
-        new_clip_embeds = self.clip_embeds[split_mask].repeat(samps, 1)
         out = {
             "means": new_means,
             "features_dc": new_features_dc,
@@ -767,7 +778,6 @@ class GemSplatModel(SplatfactoModel):
             "opacities": new_opacities,
             "scales": new_scales,
             "quats": new_quats,
-            "clip_embeds": new_clip_embeds,
         }
         for name, param in self.gauss_params.items():
             if name not in out:
@@ -815,7 +825,7 @@ class GemSplatModel(SplatfactoModel):
         # specify more if they want to add more optimizable params to gaussians.
         return {
             name: [self.gauss_params[name]]
-            for name in ["means", "scales", "quats", "features_dc", "features_rest", "opacities", "clip_embeds"]
+            for name in ["means", "scales", "quats", "features_dc", "features_rest", "opacities"]
         }
 
     def get_param_groups(self) -> Dict[str, List[Parameter]]:
@@ -827,9 +837,9 @@ class GemSplatModel(SplatfactoModel):
         gps = self.get_gaussian_param_groups()
         self.camera_optimizer.get_param_groups(param_groups=gps)
         
-        # insert parameters for the CLIP Encoder-Decoder
-        gps["clip_encoder"] = list(self.clip_encoder.parameters())
-        gps["clip_decoder"] = list(self.clip_decoder.parameters())
+        # insert parameters for the CLIP Fields
+        gps["clip_field"] = list(self.clip_field.parameters())
+        
         return gps
 
     def _get_downscale_factor(self):
@@ -873,8 +883,6 @@ class GemSplatModel(SplatfactoModel):
         if not self.training:
             # Normalize CLIP features rendered by feature field
             clip_features = outputs["clip"]
-            clip_features = self.clip_decoder(clip_features.view(-1, self.clip_embeds_latent_dim)).view(*outputs["clip"].shape[:-1],
-                                                                                                        self.clip_embeds_input_dim).float()
             clip_features /= clip_features.norm(dim=-1, keepdim=True)
 
             if self.viewer_utils.has_positives:
@@ -931,6 +939,58 @@ class GemSplatModel(SplatfactoModel):
                     outputs["composited_similarity"][mask, :] = outputs["rgb"][mask, :]
                     
         return outputs
+    
+    # @torch.no_grad()
+    def get_point_cloud_from_camera(self,
+                                    camera: Cameras,
+                                    depth: torch.Tensor,
+                                    ) -> torch.Tensor:
+        """Takes in a Camera and returns the back-projected points.
+
+        Args:
+            camera: Input Camera. This Camera Object should have all the
+            needed information to compute the back-projected points.
+            depth: Predicted depth image.
+
+        Returns:
+            back-projected points from the camera.
+        """
+        # camera intrinsics
+        H, W, K = camera.height.item(), camera.width.item(), camera.get_intrinsics_matrices()
+        K = K.squeeze()
+        
+        # unnormalized pixel coordinates
+        u_coords = torch.arange(W, device=self.device)
+        v_coords = torch.arange(H, device=self.device)
+
+        # meshgrid
+        U_grid, V_grid = torch.meshgrid(u_coords, v_coords, indexing='xy')
+
+        # transformed points in camera frame
+        # [u, v, 1] = [[f_x, 0, c_x], [0, f_y, c_y], [0, 0, 1]] @ [x/z, y/z, 1]
+        cam_pts_x = (U_grid - K[0, 2]) * depth.squeeze() / K[0, 0]
+        cam_pts_y = (V_grid - K[1, 2]) * depth.squeeze() / K[1, 1]
+        
+        cam_pcd_points = torch.stack((cam_pts_x, cam_pts_y,
+                                        depth.squeeze(), 
+                                        torch.ones_like(cam_pts_y)),
+                                        axis=-1).to(self.device)
+        
+        # camera pose
+        cam_pose = torch.eye(4, device=self.device)
+        cam_pose[:3] = camera.camera_to_worlds
+        
+        # convert from OpenGL to OpenCV Convention
+        cam_pose[:, 1] = -cam_pose[:, 1]
+        cam_pose[:, 2] = -cam_pose[:, 2]
+        
+        # point = torch.einsum('ij,hkj->hki', cam_pose, cam_pcd_points)
+        
+        point = cam_pose @ cam_pcd_points.view(-1, 4).T
+        point = point.T.view(*cam_pcd_points.shape[:2], 4)
+        point = point[..., :3].view(*depth.shape[:2], 3)
+        
+        return point
 
     def get_outputs(self, camera: Cameras,
                     compute_semantics: Optional[bool] = True) -> Dict[str, Union[torch.Tensor, List]]:
@@ -971,7 +1031,6 @@ class GemSplatModel(SplatfactoModel):
             features_rest_crop = self.features_rest[crop_ids]
             scales_crop = self.scales[crop_ids]
             quats_crop = self.quats[crop_ids]
-            clip_embeds_crop = self.clip_embeds[crop_ids]
         else:
             opacities_crop = self.opacities
             means_crop = self.means
@@ -979,7 +1038,6 @@ class GemSplatModel(SplatfactoModel):
             features_rest_crop = self.features_rest
             scales_crop = self.scales
             quats_crop = self.quats
-            clip_embeds_crop = self.clip_embeds
 
         colors_crop = torch.cat((features_dc_crop[:, None, :], features_rest_crop), dim=1)
         
@@ -990,7 +1048,6 @@ class GemSplatModel(SplatfactoModel):
         K = camera.get_intrinsics_matrices().cuda()
         W, H = int(camera.width.item()), int(camera.height.item())
         self.last_size = (H, W)
-        camera.rescale_output_resolution(camera_scale_fac)  # type: ignore
 
         # apply the compensation of screen space blurring to gaussians
         if self.config.rasterize_mode not in ["antialiased", "classic"]:
@@ -1013,7 +1070,6 @@ class GemSplatModel(SplatfactoModel):
                                 scales=torch.exp(scales_crop),
                                 opacities=torch.sigmoid(opacities_crop).squeeze(-1),
                                 colors=colors_crop,
-                                semantics=clip_embeds_crop[None],
                                 viewmats=viewmat,  # [1, 4, 4]
                                 Ks=K,  # [1, 3, 3]
                                 width=W,
@@ -1032,7 +1088,7 @@ class GemSplatModel(SplatfactoModel):
                             )
         
         # unpack the outputs
-        render, alpha, info, clip_embeds_im = render_outputs
+        render, alpha, info = render_outputs
 
         if self.training and info["means2d"].requires_grad:
             info["means2d"].retain_grad()
@@ -1052,12 +1108,43 @@ class GemSplatModel(SplatfactoModel):
 
         if background.shape[0] == 3 and not self.training:
             background = background.expand(H, W, 3)
-
+         
+        # generate a point cloud from the depth image
+        pcd_points = self.get_point_cloud_from_camera(camera, depth_im.detach().clone())
+        
+        camera.rescale_output_resolution(camera_scale_fac)  # type: ignore
+        
+        # selected indices and points
+        sel_idx = None
+        
+        # predicted CLIP embeddings
+        clip_im = None
+        
+        if self.training:
+            # subsample the points
+            # number of points to subsample
+            n_sub_sample = self.config.semantics_batch_size * 4096
+            # n_sub_sample = pcd_points.view(-1, 3).shape[0]
+            
+            # get random samples
+            sel_idx = torch.randperm(pcd_points.view(-1, 3).shape[0],
+                                     device=self.device)[:n_sub_sample]
+            
+            # selected points
+            sel_pcd_points = pcd_points.view(-1, 3)[sel_idx]
+            
+            # predicted CLIP embeddings
+            clip_im = self.clip_field(sel_pcd_points).float()
+        elif compute_semantics:
+            # predicted CLIP embeddings
+            clip_im = self.clip_field(pcd_points.view(-1, 3)).view(*depth_im.shape[:2], self.clip_embeds_input_dim).float()
+        
         outputs =  {
             "rgb": rgb.squeeze(0),  # type: ignore
             "depth": depth_im,  # type: ignore
+            "sel_idx": sel_idx,  # type: ignore
             "accumulation": alpha.squeeze(0),  # type: ignore
-            "clip": clip_embeds_im.squeeze(0),  # type: ignore
+            "clip": clip_im,  # type: ignore
             "background": background,  # type: ignore
         }  # type: ignore
 
@@ -1129,47 +1216,40 @@ class GemSplatModel(SplatfactoModel):
             gt_img = gt_img * mask
             pred_img = pred_img * mask
             
-        # Dimensionality reduction on the CLIP embeddings
-        clip_enc_inputs = batch["clip"].view(-1, self.clip_embeds_input_dim)
-        
-        # latent CLIP embeddings
-        clip_latent = self.clip_encoder(clip_enc_inputs)
-        
-        # reconstructed CLIP embeddings
-        clip_recon = self.clip_decoder(clip_latent).view(*batch["clip"].shape[:-1], self.clip_embeds_input_dim).float()
-        
-        # # reshape latent CLIP embeddings
-        clip_latent = clip_latent.view(*batch["clip"].shape[:-1], self.clip_embeds_latent_dim).float()
-
-        # Supervision in the Latent Space
-        if clip_latent.shape[:-1] != outputs["clip"].shape[:-1]:
-            # torchvision can be slow to import, so we do it lazily.
-            import torchvision.transforms.functional as TF
+        if torch.any(torch.isnan(outputs["clip"])) or torch.any(torch.isinf(outputs["clip"])):
+            raise ValueError('NaN or Inf. Detected!')
             
-            # CLIP Embeddings
-            clip_latent_img = TF.resize(clip_latent.permute(2, 0, 1), outputs["clip"].shape[:-1],
-                                        interpolation=TF.InterpolationMode.BILINEAR,
-                                        antialias=None).permute(1, 2, 0)
-    
-        # Supervision in the Latent Space
-        clip_img_loss = self.config.clip_img_loss_weight * torch.nn.functional.mse_loss(
-            outputs["clip"], clip_latent_img)\
-                + self.config.clip_img_loss_weight * (1 - torch.nn.functional.cosine_similarity(
-                                                outputs["clip"], clip_latent_img, dim=-1
-                                                )
-                                                ).mean()
+        if outputs["sel_idx"] is not None:
+            # predicted CLIP embeddings
+            pred_clip = outputs["clip"]
             
-        # CLIP-related Loss
-        # Encoder-Decoder Loss
-        clip_network_loss = self.config.clip_network_loss_weight * torch.nn.functional.mse_loss(
-            clip_recon, batch["clip"]) 
-    
-        # Cosine Similarity
-        clip_cosine_sim_loss = self.config.clip_network_cosine_sim_loss_weight * (1 - torch.nn.functional.cosine_similarity(
-            clip_recon, batch["clip"], dim=-1
-            )
-        ).mean()
-    
+            # convert linear indices to row-column indices
+            sel_idx_row, sel_idx_col = outputs["sel_idx"] // outputs["rgb"].shape[1], outputs["sel_idx"] % outputs["rgb"].shape[1]
+            
+            # scale factors
+            scale_h = batch["clip"].shape[0] / outputs["rgb"].shape[0]
+            scale_w = batch["clip"].shape[1] / outputs["rgb"].shape[1]
+            
+            # scaled indices
+            sc_y_ind = (sel_idx_row * scale_h).long()
+            sc_x_ind = (sel_idx_col * scale_w).long()
+                
+            # ground-truth CLIP embeddings
+            gt_clip = batch["clip"][sc_y_ind, sc_x_ind, :].float()
+            
+            # Loss: CLIP Embeddings
+            clip_img_loss = self.config.clip_img_loss_weight * (
+                torch.nn.functional.mse_loss(pred_clip, gt_clip) 
+                + 
+                (1 - torch.nn.functional.cosine_similarity(
+                    pred_clip, gt_clip, dim=-1
+                    )
+                    ).mean()
+                )
+        else:
+            # Loss: CLIP Embeddings
+            clip_img_loss = 0.0
+          
         # RGB-related loss
         Ll1 = torch.abs(gt_img - pred_img).mean()
         simloss = 1 - self.ssim(gt_img.permute(2, 0, 1)[None, ...], pred_img.permute(2, 0, 1)[None, ...])
@@ -1188,9 +1268,19 @@ class GemSplatModel(SplatfactoModel):
             scale_reg = torch.tensor(0.0).to(self.device)
             
         # main loss
-        main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss \
-            + clip_network_loss + clip_img_loss + clip_cosine_sim_loss
+        main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss + clip_img_loss
          
+        if self.config.enable_sparsification:
+            # sparsity-inducing loss
+            sparsity_loss = torch.abs(torch.sigmoid(self.opacities)).mean()
+            
+            # weight of the sparsity-inducing component
+            self.sparsity_weight = torch.minimum(torch.tensor(self.sparsity_weight + self.config.sparsity_weight_increment_factor * self.sparsity_weight_diff),
+                                                torch.tensor(self.config.sparsity_weight_max)).to(self.device)
+
+            # loss function
+            main_loss = main_loss + self.sparsity_weight * sparsity_loss       
+                
         loss_dict = {
             "main_loss": main_loss,
             "scale_reg": scale_reg,

@@ -69,17 +69,9 @@ gemsplat_method = MethodSpecification(
                     lr_final=5e-7, max_steps=30000, warmup_steps=1000, lr_pre_warmup=0
                 ),
             },
-            "clip_embeds": {
-                "optimizer": RAdamOptimizerConfig(lr=1e-2, eps=1e-15),
-                "scheduler": None,
-            },
-            "clip_encoder": {
+            "clip_field": {
                 "optimizer": RAdamOptimizerConfig(lr=1e-3, eps=1e-15),
-                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-6, max_steps=30000),
-            },
-            "clip_decoder": {
-                "optimizer": RAdamOptimizerConfig(lr=1e-3, eps=1e-15),
-                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-6, max_steps=30000),
+                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-4, max_steps=30000),
             },
         },
         viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
