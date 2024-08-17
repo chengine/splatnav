@@ -24,13 +24,12 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Optional, Tuple, Type, Union
 
-
 import numpy as np
 import torch
 from gsplat.cuda_legacy._torch_impl import quat_to_rotmat
 
 try:
-    from gemsplat.rasterization_routines.rendering import rasterization
+    from gsplat.rendering import rasterization
 except ImportError:
     print("Please install gsplat>=1.0.0")
 from gsplat.cuda_legacy._wrapper import num_sh_bases
@@ -42,13 +41,10 @@ from nerfstudio.cameras.cameras import Cameras
 from nerfstudio.data.scene_box import OrientedBox
 from nerfstudio.engine.callbacks import TrainingCallback, TrainingCallbackAttributes, TrainingCallbackLocation
 from nerfstudio.engine.optimizers import Optimizers
-
 from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.utils.colors import get_color
 from nerfstudio.utils.misc import torch_compile
 from nerfstudio.utils.rich_utils import CONSOLE
-
-from nerfstudio.models.splatfacto import SplatfactoModelConfig, SplatfactoModel
 
 from gemsplat.encoders.image_encoder import BaseImageEncoder
 from gemsplat.data.gemsplat_datamanager import GemSplatDataManager
@@ -65,8 +61,6 @@ try:
     import tinycudann as tcnn
 except ImportError:
     pass
-
-import time
 
 
 def random_quat_tensor(N):
@@ -102,6 +96,7 @@ def SH2RGB(sh):
     C0 = 0.28209479177387814
     return sh * C0 + 0.5
 
+
 def resize_image(image: torch.Tensor, d: int):
     """
     Downscale images using the same 'area' method in opencv
@@ -116,6 +111,7 @@ def resize_image(image: torch.Tensor, d: int):
     image = image.to(torch.float32)
     weight = (1.0 / (d * d)) * torch.ones((1, 1, d, d), dtype=torch.float32, device=image.device)
     return tf.conv2d(image.permute(2, 0, 1)[:, None, ...], weight, stride=d).squeeze(1).permute(1, 2, 0)
+
 
 @torch_compile()
 def get_viewmat(optimized_camera_to_world):
@@ -135,61 +131,10 @@ def get_viewmat(optimized_camera_to_world):
     viewmat[:, :3, 3:4] = T_inv
     return viewmat
 
-    
-class Autoencoder(torch.nn.Module):
-    '''
-    Autoencoder Class
-    '''
-    def __init__(self, input_dim, latent_dim, layer_sizes=None):
-        super(Autoencoder, self).__init__()
-        
-        # encoder
-        self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(input_dim, 1024),
-            torch.nn.ReLU(),
-            torch.nn.Linear(1024, 1024),
-            torch.nn.ReLU(),
-            torch.nn.Linear(1024, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 128),
-            torch.nn.ReLU(),
-            torch.nn.Linear(128, 128),
-            torch.nn.ReLU(),
-            torch.nn.Linear(128, latent_dim)
-        )
-        
-        # decoder
-        self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(latent_dim, 128),
-            torch.nn.ReLU(),
-            torch.nn.Linear(128, 128),
-            torch.nn.ReLU(),
-            torch.nn.Linear(128, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 1024),
-            torch.nn.ReLU(),
-            torch.nn.Linear(1024, 1024),
-            torch.nn.ReLU(),
-            torch.nn.Linear(1024, input_dim)
-        )
-        
-    def forward(self, x):
-        # encode inputs
-        x = self.encoder(x)
-        
-        # decode latent inputs
-        x = self.decoder(x)
-        
-        return x 
-
 
 @dataclass
-class GemSplatModelConfig(SplatfactoModelConfig):
-    """Splatfacto Model Config, nerfstudio's implementation of Gaussian Splatting"""
+class GemSplatModelConfig(ModelConfig):
+    """GemSplat Model Config, nerfstudio's implementation of Gaussian Splatting"""
 
     _target: Type = field(default_factory=lambda: GemSplatModel)
     warmup_length: int = 500
@@ -210,7 +155,7 @@ class GemSplatModelConfig(SplatfactoModelConfig):
     """If True, continue to cull gaussians post refinement"""
     reset_alpha_every: int = 30
     """Every this many refinement steps, reset the alpha"""
-    densify_grad_thresh: float = 0.0002
+    densify_grad_thresh: float = 0.0008
     """threshold of positional gradient norm for densifying gaussians"""
     densify_size_thresh: float = 0.01
     """below this size, gaussians are *duplicated*, otherwise split"""
@@ -256,6 +201,8 @@ class GemSplatModelConfig(SplatfactoModelConfig):
     """
     camera_optimizer: CameraOptimizerConfig = field(default_factory=lambda: CameraOptimizerConfig(mode="off"))
     """Config of the camera optimizer to use"""
+    enable_clip_mask: bool = False
+    """Option to utilize the alpha channel as a mask for CLIP distillation."""
     semantics_batch_size: int = 1
     """The batch size for training the semantic field."""
     output_semantics_during_training: bool = False
@@ -288,15 +235,16 @@ class GemSplatModelConfig(SplatfactoModelConfig):
     hashgrid_resolutions: Tuple[Tuple[int]] = ((16, 128), (128, 512))
     hashgrid_sizes: Tuple[int] = (19, 19)
 
-class GemSplatModel(SplatfactoModel):
+
+class GemSplatModel(Model):
     """Nerfstudio's implementation of Gaussian Splatting
 
     Args:
-        config: Splatfacto configuration to instantiate model
+        config: GemSplat configuration to instantiate model
     """
 
     config: GemSplatModelConfig
-
+    
     def __init__(
         self,
         *args,
@@ -398,14 +346,14 @@ class GemSplatModel(SplatfactoModel):
                 "quats": quats,
                 "features_dc": features_dc,
                 "features_rest": features_rest,
-                "opacities": opacities
+                "opacities": opacities,
             }
         )
 
         self.camera_optimizer: CameraOptimizer = self.config.camera_optimizer.setup(
             num_cameras=self.num_train_data, device="cpu"
         )
-        
+
         # metrics
         from torchmetrics.image import PeakSignalNoiseRatio
         from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
@@ -628,7 +576,6 @@ class GemSplatModel(SplatfactoModel):
         assert step == self.step
         if self.step <= self.config.warmup_length:
             return
-        
         with torch.no_grad():
             # Offset all the opacity reset logic by refine_every so that we don't
             # save checkpoints right when the opacity is reset (saves every 2k)
@@ -658,7 +605,6 @@ class GemSplatModel(SplatfactoModel):
                     self.gauss_params[name] = torch.nn.Parameter(
                         torch.cat([param.detach(), split_params[name], dup_params[name]], dim=0)
                     )
-
                 # append zeros to the max_2Dsize tensor
                 self.max_2Dsize = torch.cat(
                     [
@@ -732,8 +678,8 @@ class GemSplatModel(SplatfactoModel):
             toobigs = (torch.exp(self.scales).max(dim=-1).values > self.config.cull_scale_thresh).squeeze()
             if self.step < self.config.stop_screen_size_at:
                 # cull big screen space
-                assert self.max_2Dsize is not None
-                toobigs = toobigs | (self.max_2Dsize > self.config.cull_screen_size).squeeze()
+                if self.max_2Dsize is not None:
+                    toobigs = toobigs | (self.max_2Dsize > self.config.cull_screen_size).squeeze()
             culls = culls | toobigs
             toobigs_count = torch.sum(toobigs).item()
         for name, param in self.gauss_params.items():
@@ -927,7 +873,7 @@ class GemSplatModel(SplatfactoModel):
                 similarity_clip = outputs[f"similarity"] - outputs[f"similarity"].min()
                 similarity_clip /= (similarity_clip.max() + 1e-10)
                 outputs["similarity_GUI"] = apply_colormap(similarity_clip,
-                                                        ColormapOptions("turbo"))
+                                                           ColormapOptions("turbo"))
                 
             if "rgb" in outputs.keys():
                 if self.viewer_utils.has_positives:
@@ -1040,7 +986,7 @@ class GemSplatModel(SplatfactoModel):
             quats_crop = self.quats
 
         colors_crop = torch.cat((features_dc_crop[:, None, :], features_rest_crop), dim=1)
-        
+
         BLOCK_WIDTH = 16  # this controls the tile size of rasterization, 16 is a good default
         camera_scale_fac = self._get_downscale_factor()
         camera.rescale_output_resolution(1 / camera_scale_fac)
@@ -1063,33 +1009,29 @@ class GemSplatModel(SplatfactoModel):
         else:
             colors_crop = torch.sigmoid(colors_crop)
             sh_degree_to_use = None
-            
-        render_outputs = rasterization(
-                                means=means_crop,
-                                quats=quats_crop / quats_crop.norm(dim=-1, keepdim=True),
-                                scales=torch.exp(scales_crop),
-                                opacities=torch.sigmoid(opacities_crop).squeeze(-1),
-                                colors=colors_crop,
-                                viewmats=viewmat,  # [1, 4, 4]
-                                Ks=K,  # [1, 3, 3]
-                                width=W,
-                                height=H,
-                                tile_size=BLOCK_WIDTH,
-                                packed=False,
-                                near_plane=0.01,
-                                far_plane=1e10,
-                                render_mode=render_mode,
-                                sh_degree=sh_degree_to_use,
-                                sparse_grad=False,
-                                absgrad=True,
-                                rasterize_mode=self.config.rasterize_mode,
-                                # set some threshold to disregrad small gaussians for faster rendering.
-                                # radius_clip=3.0,
-                            )
-        
-        # unpack the outputs
-        render, alpha, info = render_outputs
 
+        render, alpha, info = rasterization(
+            means=means_crop,
+            quats=quats_crop / quats_crop.norm(dim=-1, keepdim=True),
+            scales=torch.exp(scales_crop),
+            opacities=torch.sigmoid(opacities_crop).squeeze(-1),
+            colors=colors_crop,
+            viewmats=viewmat,  # [1, 4, 4]
+            Ks=K,  # [1, 3, 3]
+            width=W,
+            height=H,
+            tile_size=BLOCK_WIDTH,
+            packed=False,
+            near_plane=0.01,
+            far_plane=1e10,
+            render_mode=render_mode,
+            sh_degree=sh_degree_to_use,
+            sparse_grad=False,
+            absgrad=True,
+            rasterize_mode=self.config.rasterize_mode,
+            # set some threshold to disregrad small gaussians for faster rendering.
+            # radius_clip=3.0,
+        )
         if self.training and info["means2d"].requires_grad:
             info["means2d"].retain_grad()
         self.xys = info["means2d"]  # [1, N, 2]
@@ -1108,7 +1050,7 @@ class GemSplatModel(SplatfactoModel):
 
         if background.shape[0] == 3 and not self.training:
             background = background.expand(H, W, 3)
-         
+
         # generate a point cloud from the depth image
         pcd_points = self.get_point_cloud_from_camera(camera, depth_im.detach().clone())
         
@@ -1152,8 +1094,8 @@ class GemSplatModel(SplatfactoModel):
             # Compute semantic inputs, e.g., composited similarity.
             outputs = self.get_semantic_outputs(outputs=outputs)
         
-        return outputs       
-
+        return outputs
+    
     def get_gt_img(self, image: torch.Tensor):
         """Compute groundtruth image with iteration dependent downscale factor for evaluation purpose
 
@@ -1215,7 +1157,7 @@ class GemSplatModel(SplatfactoModel):
             assert mask.shape[:2] == gt_img.shape[:2] == pred_img.shape[:2]
             gt_img = gt_img * mask
             pred_img = pred_img * mask
-            
+
         if torch.any(torch.isnan(outputs["clip"])) or torch.any(torch.isinf(outputs["clip"])):
             raise ValueError('NaN or Inf. Detected!')
             
@@ -1237,6 +1179,14 @@ class GemSplatModel(SplatfactoModel):
             # ground-truth CLIP embeddings
             gt_clip = batch["clip"][sc_y_ind, sc_x_ind, :].float()
             
+            # mask using the alpha channel
+            if self.config.enable_clip_mask:
+                if batch["image"].shape[-1] > 3:
+                    # mask
+                    mask = self.get_gt_img(batch["image"])[..., -1].float()[..., None].reshape(-1, 1)[outputs["sel_idx"]]
+                    pred_clip = pred_clip * mask
+                    gt_clip = gt_clip * mask
+                            
             # Loss: CLIP Embeddings
             clip_img_loss = self.config.clip_img_loss_weight * (
                 torch.nn.functional.mse_loss(pred_clip, gt_clip) 
@@ -1253,7 +1203,6 @@ class GemSplatModel(SplatfactoModel):
         # RGB-related loss
         Ll1 = torch.abs(gt_img - pred_img).mean()
         simloss = 1 - self.ssim(gt_img.permute(2, 0, 1)[None, ...], pred_img.permute(2, 0, 1)[None, ...])
-       
         if self.config.use_scale_regularization and self.step % 10 == 0:
             scale_exp = torch.exp(self.scales)
             scale_reg = (
@@ -1266,7 +1215,7 @@ class GemSplatModel(SplatfactoModel):
             scale_reg = 0.1 * scale_reg.mean()
         else:
             scale_reg = torch.tensor(0.0).to(self.device)
-            
+        
         # main loss
         main_loss = (1 - self.config.ssim_lambda) * Ll1 + self.config.ssim_lambda * simloss + clip_img_loss
          
@@ -1285,7 +1234,7 @@ class GemSplatModel(SplatfactoModel):
             "main_loss": main_loss,
             "scale_reg": scale_reg,
         }
-
+        
         if self.training:
             # Add loss from camera optimizer
             self.camera_optimizer.get_loss_dict(loss_dict)
@@ -1293,24 +1242,21 @@ class GemSplatModel(SplatfactoModel):
         return loss_dict
 
     @torch.no_grad()
-    def get_outputs_for_camera(self, camera: Cameras, 
-                               obb_box: Optional[OrientedBox] = None,
-                               compute_semantics: Optional[bool] = True) -> Dict[str, torch.Tensor]:
+    def get_outputs_for_camera(self, camera: Cameras, obb_box: Optional[OrientedBox] = None) -> Dict[str, torch.Tensor]:
         """Takes in a camera, generates the raybundle, and computes the output of the model.
         Overridden for a camera-based gaussian model.
 
         Args:
-            camera: generates raybundle.
-            compute_semantics: Option to compute the semantic information of the scene.
+            camera: generates raybundle
         """
         assert camera is not None, "must provide camera to gaussian model"
         self.set_crop(obb_box)
-        outs = self.get_outputs(camera.to(self.device), compute_semantics=compute_semantics)
+        outs = self.get_outputs(camera.to(self.device))
         return outs  # type: ignore
 
     def get_image_metrics_and_images(
         self, outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
-        ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
+    ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
         """Writes the test image outputs.
 
         Args:
@@ -1322,13 +1268,9 @@ class GemSplatModel(SplatfactoModel):
         Returns:
             A dictionary of metrics.
         """
-        # gt_rgb = self.composite_with_background(self.get_gt_img(batch["image"]), outputs["background"])
-        gt_rgb = batch["image"].to(self.device)
-        if gt_rgb.dtype == torch.uint8:
-            gt_rgb = gt_rgb.float() / 255.0
-        gt_rgb = self.composite_with_background(gt_rgb, outputs["background"])
+        gt_rgb = self.composite_with_background(self.get_gt_img(batch["image"]), outputs["background"])
         predicted_rgb = outputs["rgb"]
-        
+
         combined_rgb = torch.cat([gt_rgb, predicted_rgb], dim=1)
 
         # Switch images from [H, W, C] to [1, C, H, W] for metrics computations

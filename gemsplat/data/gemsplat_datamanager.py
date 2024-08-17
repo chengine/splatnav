@@ -93,7 +93,7 @@ class GemSplatDataManager(FullImageDatamanager):  # pylint: disable=abstract-met
         self.image_encoder.im_h = im_h
         self.image_encoder.im_w = im_w
 
-        images = [self.train_dataset[i]["image"].permute(2, 0, 1)[None, ...] for i in range(len(self.train_dataset))]
+        images = [self.train_dataset[i]["image"][..., :3].permute(2, 0, 1)[None, ...] for i in range(len(self.train_dataset))]
         images = torch.cat(images)
     
         # path to GemSplat
@@ -132,7 +132,7 @@ class GemSplatDataManager(FullImageDatamanager):  # pylint: disable=abstract-met
 
         # TODO: Add functionality for RGBA images
         data = deepcopy(self.cached_train[image_idx])
-        data["image"] = data["image"].to(self.device)[..., :3]
+        data["image"] = data["image"].to(self.device)
         
         # # CLIP embeddings
         data["clip"] = self.clip_interpolator(image_idx).to(self.device)
