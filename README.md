@@ -19,7 +19,6 @@
 ```python 
 ns-train gemsplat --data <path to the data> \
     --output-dir <path to the output directory> \
-    --pipeline.model.num_semantic_channels 32 \
     --pipeline.model.camera-optimizer.mode SO3xR3 \
     --pipeline.model.rasterize-mode antialiased
 ```
