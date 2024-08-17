@@ -22,4 +22,3 @@ ns-train gemsplat --data <path to the data> \
     --pipeline.model.camera-optimizer.mode SO3xR3 \
     --pipeline.model.rasterize-mode antialiased
 ```
-#### Note that the rasterization pipeline supports up to 32 channels for semantic knowledge distillation. A greater number of channels provides higher-fidelity semantic masks at the expense of longer training and rendering times.
