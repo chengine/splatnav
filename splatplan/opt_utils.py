@@ -4,7 +4,7 @@ import clarabel
 from scipy import sparse
 
 from spline_utils import BezierCurve
-from matrices import get_qp_matrices
+from matrices import get_qp_matrices, get_polytope_projection_matrix, project_point_into_polytope
 # --------------------------------------------------------------------------------#
 ######################################################################################################
 # Spline optimizer for poly Bezier curve
@@ -17,6 +17,7 @@ class SplineOptimizer():
 
         ### Instantiate Bezier Curve
         self.bspline = BezierCurve(num_control_points, num_deriv, dim)
+        self.control_points = None
 
     def optimize_bspline(self, polytopes, x0, xf, time_scales=None):
         # If x0 and xf are positions and higher order derivatives (less than the set number of derivatives to enforce continuity) are provided (full or partially)
@@ -24,12 +25,37 @@ class SplineOptimizer():
         # and acceleration continuity will be enforced. If x0 is 2 x dim, then position and velocity continuity will be enforced.
         # NOTE: If you pass in only positions, make sure that x0 is size 1 x dim and xf is size 1 x dim.
 
+        if x0.ndim == 1:
+            x0 = x0[None, :]
+        if xf.ndim == 1:
+            xf = xf[None, :]
+
+        # Check if the position x0 and xf are in the polytopes
+        position_x0 = x0[0]
+        position_xf = xf[0]
+
+        A_x0, b_x0 = polytopes[0]
+        A_xf, b_xf = polytopes[-1]
+
+        if not torch.all( (A_x0 @ position_x0 - b_x0) <= 0.):
+            print('Initial position not in the first polytope!')
+            projected_x0 = project_point_into_polytope(A_x0, b_x0, position_x0)
+            x0[0] = projected_x0
+
+        if not torch.all( (A_xf @ position_xf - b_xf) <= 0.):
+            print('Final position not in the last polytope!')
+            projected_xf = project_point_into_polytope(A_xf, b_xf, position_xf)
+            xf[0] = projected_x
+
         # Optimize coefficients
         control_points, solver_success = self.optimize_bspline_coefficients(polytopes, x0, xf, time_scales)
 
         if solver_success:
             # Set control points
             self.bspline.set_control_points( control_points, time_scales )
+            self.polytopes = polytopes
+            self.control_points = control_points
+            self.time_scales = time_scales
 
         return control_points, solver_success
 
@@ -94,3 +120,6 @@ class SplineOptimizer():
             output = None
 
         return output
+
+    # TODO: At some wall clock time t, given the state, locally construct the Bezier curve linking to the next spline
+    def 

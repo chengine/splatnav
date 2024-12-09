@@ -135,3 +135,37 @@ def get_polytope_projection_matrix(A, b, pt):
     w = -2*pt
 
     return A, b, Q, w
+
+def project_point_into_polytope(A, b, pt):
+    # A: num_constraints x dim
+    # b: num_constraints
+    # pt: dim
+    # Returns the projection of pt into the polytope defined by A and b
+
+    A, b, Q, w = get_polytope_projection_matrix(A, b, pt)
+    cones = [clarabel.NonnegativeConeT(A.shape[0])]
+
+    ###### CLARABEL #######
+
+    Q = sparse.csc_matrix(Q)
+    A = sparse.csc_matrix(A)
+
+    settings = clarabel.DefaultSettings()
+    settings.verbose = False
+
+    solver = clarabel.DefaultSolver(Q, w, A, b, cones, settings)
+
+    sol = solver.solve()
+
+    # Check solver status
+    if str(sol.status) != 'Solved':
+        print(f"Solver status: {sol.status}")
+        print('Clarabel did not solve polytope projection!')
+        solver_success = False
+        projected_pt = None
+
+    else:
+        solver_success = True
+        projected_pt = np.array(sol.x)
+
+    return projected_pt, solver_success

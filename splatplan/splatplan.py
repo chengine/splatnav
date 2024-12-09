@@ -98,14 +98,14 @@ class SplatPlan():
         tnow = time.time()
         torch.cuda.synchronize()
 
-        traj, feasible = self.spline_planner.optimize_b_spline(polytopes, segments[0][0], segments[-1][-1])
+        # TODO: ADD x0 and xf FOR FULL STATE AND HIGHER ORDER DERIVATIVES. ADD IN TIME SCALE BASED ON VMAX.
+        # EVEN IF x0, xf are not feasible, the planner automatically projects them into the polytope!
+        traj, feasible = self.spline_planner.optimize_bspline(polytopes, x0, xf, time_scale)
         if not feasible:
-            traj = torch.stack([x0, xf], dim=0)
-
-            self.save_polytope(polytopes, 'infeasible.obj')
-
-            print(compute_segment_in_polytope(polytope[0], polytope[1], segments[-1]))
-            raise
+            #traj = torch.stack([x0, xf], dim=0)
+            # self.save_polytope(polytopes, 'infeasible.obj')
+            #print(compute_segment_in_polytope(polytope[0], polytope[1], segments[-1]))
+            raise ValueError('Infeasible path!')
 
         torch.cuda.synchronize()
         times_opt = time.time() - tnow
@@ -122,8 +122,6 @@ class SplatPlan():
             'times_opt': times_opt,
             'feasible': feasible
         }
-
-        # self.save_polytope(polytopes, 'feasible.obj')
         
         return traj_data
     
