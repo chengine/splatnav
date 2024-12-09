@@ -1242,7 +1242,9 @@ class GemSplatModel(Model):
         return loss_dict
 
     @torch.no_grad()
-    def get_outputs_for_camera(self, camera: Cameras, obb_box: Optional[OrientedBox] = None) -> Dict[str, torch.Tensor]:
+    def get_outputs_for_camera(self, camera: Cameras,
+                               obb_box: Optional[OrientedBox] = None,
+                               compute_semantics: Optional[bool] = True) -> Dict[str, torch.Tensor]:
         """Takes in a camera, generates the raybundle, and computes the output of the model.
         Overridden for a camera-based gaussian model.
 
@@ -1251,7 +1253,7 @@ class GemSplatModel(Model):
         """
         assert camera is not None, "must provide camera to gaussian model"
         self.set_crop(obb_box)
-        outs = self.get_outputs(camera.to(self.device))
+        outs = self.get_outputs(camera.to(self.device), compute_semantics=compute_semantics)
         return outs  # type: ignore
 
     def get_image_metrics_and_images(
