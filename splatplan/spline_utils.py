@@ -1,354 +1,166 @@
-import numpy as np 
-import cvxpy as cvx
 import torch
+import numpy as np
 import sympy as sym
 import scipy
-import clarabel
-from scipy import sparse
-# --------------------------------------------------------------------------------#
+import time
 
-def b_spline_terms(t, deg):
-    # terms are (K choose k)(1-t)**(K-k) * t**k
-    terms = []
-    for i in range(deg + 1):
-        scaling = scipy.special.comb(deg, i)
-        term = scaling * (1-t)**(deg - i) *t**i
-        terms.append(term)
+class BezierCurve():
+    def __init__(self, num_control_points, num_deriv, dim):
+        self.n = num_control_points - 1     # degree of the Bezier curve
 
-    return np.array(terms).astype(np.float32)
+        assert self.n >= 1, 'Number of control points must be at least 2'
+        self.num_deriv = num_deriv
+        self.dim = dim
 
-def b_spline_term_derivs(pts, deg, d):
-    # terms are (K choose k)(1-t)**(K-k) * t**k
-    terms = []
-    for i in range(deg + 1):
-        scaling = scipy.special.comb(deg, i)
+        self.compute_bernstein_coefficients()
+        self.time_scale = None
+
+    def compute_bernstein_coefficients(self):
+        # Computes the Bernstein coefficients symbolically
         t = sym.Symbol('t')
-        term = []
-        for pt in pts:
-            term.append(scaling * sym.diff((1-t)**(deg - i) *t**i, t, d).subs(t, pt))
-        terms.append(np.array(term))
 
-    return np.array(terms).astype(np.float32)
+        tnow = time.time()
+        mat_fx = []
 
-def create_time_pts(deg=8, N_sec=10, tf=1., device='cpu'):
-    #Find coefficients for T splines, each connecting one waypoint to the next
-    
-    # THESE COEFFICIENTS YOU CAN STORE, SO YOU ONLY NEED TO COMPUTE THEM ONCE!
-    time_pts = np.linspace(0., tf, N_sec)
+        for k in range(self.n + 1):
+            rows = []
 
-    T = b_spline_terms(time_pts, deg)   #(deg + 1) x 2
-    dT = b_spline_term_derivs(time_pts, deg, 1)
-    ddT = b_spline_term_derivs(time_pts, deg, 2)
-    dddT = b_spline_term_derivs(time_pts, deg, 3)
-    ddddT = b_spline_term_derivs(time_pts, deg, 4)
+            for deriv in range( self.num_deriv + 1):
+                # 0-th order
+                if deriv == 0:
+                    deriv_fx = ( ( 1 - t )**( self.n - k ) ) * ( t**k )
 
-    data = {
-    'time_pts': torch.tensor(T, device=device),
-    'd_time_pts': torch.tensor(dT, device=device),
-    'dd_time_pts': torch.tensor(ddT, device=device),
-    'ddd_time_pts': torch.tensor(dddT, device=device),
-    'dddd_time_pts': torch.tensor(ddddT, device=device)
-    }
-
-    return data
-
-### 
-def get_qp_matrices(T, dT, ddT, dddT, ddddT, polytopes, x0, xf, device):
-    
-    N_sec = len(polytopes)
-    deg = T[0].shape[0]
-    w = deg*N_sec*3
-    k = deg*3
-    k3 = deg
-
-    index = torch.arange(deg-1, device=device)
-
-    # Create cost
-    Q_ = torch.eye(deg, device=device)
-    off_diag = torch.stack([ index, index + 1 ], dim=-1)
-    Q_[off_diag[:, 0], off_diag[:, 1]] = -1.
-    Q_ = Q_ + Q_.T
-    Q_[0, 0] = 1.
-    Q_[-1, -1] = 1.
-    Q__ = N_sec*3*[Q_]
-    Q = torch.block_diag(*Q__)
-
-    # Create inequality matrices
-    A = []
-    b = []
-
-    # Create equality matrices
-    C = torch.zeros((3* 4* N_sec, w), device=device)
-    d = torch.zeros(C.shape[0], device=device)
-
-    # Create cost matrix P, consisting only of jerk
-    for i in range(N_sec):
-        A_ = polytopes[i][0]
-        b_ = polytopes[i][1]
-
-        # Ax <= b
-        A_x = deg*[A_[:, 0].reshape(-1, 1)]
-        A_y = deg*[A_[:, 1].reshape(-1, 1)]
-        A_z = deg*[A_[:, 2].reshape(-1, 1)]
-
-        A_xs = torch.block_diag(*A_x)
-        A_ys = torch.block_diag(*A_y)
-        A_zs = torch.block_diag(*A_z)
-
-        A_blck = torch.cat([A_xs, A_ys, A_zs], dim=-1)
-        A.append(A_blck)
-        b.extend(deg*[b_])
-
-        # Cx = d
-        if i < N_sec-1:
-            pos1_cof = T[i][:, -1].reshape(1, -1)
-            pos2_cof = -T[i+1][:, 0].reshape(1, -1)
-
-            p1 = torch.block_diag(pos1_cof, pos1_cof, pos1_cof)
-            p2 = torch.block_diag(pos2_cof, pos2_cof, pos2_cof)
-
-            vel1_cof = dT[i][:, -1].reshape(1, -1)
-            vel2_cof = -dT[i+1][:, 0].reshape(1, -1)
-
-            v1 = torch.block_diag(vel1_cof, vel1_cof, vel1_cof)
-            v2 = torch.block_diag(vel2_cof, vel2_cof, vel2_cof)
-
-            acc1_cof = ddT[i][:, -1].reshape(1, -1)
-            acc2_cof = -ddT[i+1][:, 0].reshape(1, -1)
-
-            a1 = torch.block_diag(acc1_cof, acc1_cof, acc1_cof)
-            a2 = torch.block_diag(acc2_cof, acc2_cof, acc2_cof)
-
-            jer1_cof = dddT[i][:, -1].reshape(1, -1)
-            jer2_cof = -dddT[i+1][:, 0].reshape(1, -1)
-
-            j1 = torch.block_diag(jer1_cof, jer1_cof, jer1_cof)
-            j2 = torch.block_diag(jer2_cof, jer2_cof, jer2_cof)
-
-            C_t1 = torch.cat([p1, v1, a1, j1], dim=0)
-            C_t2 = torch.cat([p2, v2, a2, j2], dim=0)
-            C_t = torch.cat([C_t1, C_t2], dim=-1)
-
-            n, m = C_t.shape
-            n_e = m//2
-            C[n*i: n*(i+1), n_e*i:n_e*(i+2)] = C_t
-    
-    # Create inequality matrices
-    A = torch.block_diag(*A)
-    b = torch.cat(b, dim=0)
-    b = b.reshape((-1,))
-
-    # Append initial and final position constraints
-    p0_cof = T[0][:, 0].reshape(1, -1)
-    pf_cof = T[-1][:, -1].reshape(1, -1)
-
-    p0 = torch.block_diag(p0_cof, p0_cof, p0_cof)
-    pf = torch.block_diag(pf_cof, pf_cof, pf_cof)
-
-    C_ = torch.zeros((3*2, w), device=device)
-    C_[:3, 0:n_e] = p0
-    C_[3:, -n_e:] = pf
-
-    d_ = torch.cat([x0, xf], dim=0)
-    #d_ = torch.cat([x0, torch.zeros(3, device=device)], dim=0)
-
-    # Concatenate G and h matrices
-    C = torch.cat([C, C_], dim=0)
-
-    d = torch.cat([d, d_], dim=0)
-    d = d.reshape((-1,))
-
-    return A, b, C, d, Q
-
-######################################################################################################
-class SplinePlanner():
-    def __init__(self, spline_deg=6, N_sec=10, device='cpu', use_cvxpy=False) -> None:
-        self.spline_deg = spline_deg
-        self.N_sec = N_sec
-        self.device = device
-        self.use_cvxpy = use_cvxpy
-
-        ### Create the time points matrix/coefficients for the Bezier curve
-        self.time_pts = create_time_pts(deg=spline_deg, N_sec=N_sec, device=device)
-
-    # def optimize_one_step(self, A, b, x0, xf):
-    #     self.calculate_b_spline_coeff_one_step(A, b, x0, xf)
-    #     return self.eval_b_spline()
-
-    # def calculate_b_spline_coeff_one_step(self, A, b, x0, xf):
-    #     N_sections = len(A)         #Number of segments
-
-    #     T = self.time_pts['time_pts']
-    #     dT = self.time_pts['d_time_pts']
-    #     ddT = self.time_pts['dd_time_pts']
-    #     dddT = self.time_pts['ddd_time_pts']
-    #     ddddT = self.time_pts['dddd_time_pts']
-
-    #     # Copy time points N times
-    #     T_list = [T]*N_sections
-    #     dT_list = [dT]*N_sections
-    #     ddT_list = [ddT]*N_sections
-    #     dddT_list = [dddT]*N_sections
-    #     ddddT_list = [ddddT]*N_sections
-
-    #     #Set up CVX problem
-    #     A_prob, b_prob, C_prob, d_prob, Q_prob = get_qp_matrices(T_list, dT_list, ddT_list, dddT_list, ddddT_list, A, b, x0, xf)
-        
-    #     # eliminate endpoint constraint
-    #     C_prob = C_prob[:-3]
-    #     d_prob = d_prob[:-3]
-        
-    #     n_var = C_prob.shape[-1]
-
-    #     x = cvx.Variable(n_var)
-
-    #     final_point = cvx.reshape(x, (N_sections*3, -1), order='C')[-3:, -1]
-
-    #     obj = cvx.Minimize(cvx.quad_form(x, Q_prob) + cvx.quad_form(final_point - xf, np.eye(3)))
-
-    #     constraints = [A_prob @ x <= b_prob, C_prob @ x == d_prob]
-
-    #     prob = cvx.Problem(obj, constraints)
-
-    #     prob.solve(solver='CLARABEL')
-        
-    #     coeffs = []
-    #     cof_splits = np.split(x.value, N_sections)
-    #     for cof_split in cof_splits:
-    #         xyz = np.split(cof_split, 3)
-    #         cof = np.stack(xyz, axis=0)
-    #         coeffs.append(cof)
-
-    #     self.coeffs = np.array(coeffs)
-    #     return self.coeffs, prob.value
-
-    def optimize_b_spline(self, polytopes, x0, xf):
-        _, solver_success = self.calculate_b_spline_coeff(polytopes, x0, xf)
-        return self.eval_b_spline(), solver_success
-
-    def calculate_b_spline_coeff(self, polytopes, x0, xf):
-        N_sections = len(polytopes)         #Number of segments
-
-        T = self.time_pts['time_pts']
-        dT = self.time_pts['d_time_pts']
-        ddT = self.time_pts['dd_time_pts']
-        dddT = self.time_pts['ddd_time_pts']
-        ddddT = self.time_pts['dddd_time_pts']
-
-        # Copy time points N times
-        T_list = [T]*N_sections
-        dT_list = [dT]*N_sections
-        ddT_list = [ddT]*N_sections
-        dddT_list = [dddT]*N_sections
-        ddddT_list = [ddddT]*N_sections
-
-        #Set up matrices
-        A_prob, b_prob, C_prob, d_prob, Q_prob = get_qp_matrices(T_list, dT_list, ddT_list, dddT_list, ddddT_list, polytopes, x0, xf, self.device)
-        n_var = C_prob.shape[-1]
-
-        A_prob = A_prob.cpu().numpy()
-        b_prob = b_prob.cpu().numpy()
-        C_prob = C_prob.cpu().numpy()
-        d_prob = d_prob.cpu().numpy()
-        Q_prob = Q_prob.cpu().numpy()
-
-        ###### CLARABEL #######
-
-        if self.use_cvxpy:
-            x = cvx.Variable(n_var)
-
-            loss = cvx.quad_form(x, Q_prob)
-            objective = cvx.Minimize(loss)
-            constraints = [A_prob @ x <= b_prob, C_prob @ x == d_prob]
-
-            prob = cvx.Problem(objective, constraints)
-            prob.solve(solver='ECOS')
-
-            # Check solver status
-            if prob.status in ["infeasible", "unbounded"]:
-                print(f"Solver status: {prob.status}")
-                #print(f"Number of iterations: {sol.iterations}")
-                print('CVXPY did not solve the problem!')
-                solver_success = False
-                solution = None
-                self.coeffs = None
-
-            else:
-                solver_success = True
-                solution = np.array(x.value)
-
-                coeffs = []
-                cof_splits = np.split(solution, N_sections)
-                for cof_split in cof_splits:
-                    xyz = np.split(cof_split, 3)
-                    cof = np.stack(xyz, axis=0)
-                    coeffs.append(cof)
-                self.coeffs = np.array(coeffs)
-
-        else:
-            P = sparse.csc_matrix(Q_prob)
-            A = sparse.csc_matrix(np.concatenate([C_prob, A_prob], axis=0))
-
-            q = np.zeros(n_var)
-            b = np.concatenate([d_prob, b_prob], axis=0)
-
-            cones = [clarabel.ZeroConeT(C_prob.shape[0]), clarabel.NonnegativeConeT(A_prob.shape[0])]
-
-            settings = clarabel.DefaultSettings()
-            settings.verbose = False
-
-            solver = clarabel.DefaultSolver(P, q, A, b, cones, settings)
-
-            sol = solver.solve()
-
-            # Check solver status
-            if str(sol.status) != 'Solved':
-                print(f"Solver status: {sol.status}")
-                #print(f"Number of iterations: {sol.iterations}")
-                print('Clarabel did not solve the problem!')
-                solver_success = False
-                solution = None
-                self.coeffs = None
-
-            else:
-                solver_success = True
-                solution = np.array(sol.x)
-
-                coeffs = []
-                cof_splits = np.split(solution, N_sections)
-                for cof_split in cof_splits:
-                    xyz = np.split(cof_split, 3)
-                    cof = np.stack(xyz, axis=0)
-                    coeffs.append(cof)
-                self.coeffs = np.array(coeffs)
-
-        return self.coeffs, solver_success
-
-    def eval_b_spline(self):
-        T = self.time_pts['time_pts'].cpu().numpy()
-        dT = self.time_pts['d_time_pts'].cpu().numpy()
-        ddT = self.time_pts['dd_time_pts'].cpu().numpy()
-        dddT = self.time_pts['ddd_time_pts'].cpu().numpy()
-        ddddT = self.time_pts['dddd_time_pts'].cpu().numpy()
-
-        if self.coeffs is not None:
-            full_traj = []
-            for i, coeff in enumerate(self.coeffs):
-                if i < len(self.coeffs) - 1:
-                    pos = (coeff @ T[:, :-1]).T
-                    vel = (coeff @ dT[:, :-1]).T
-                    acc = (coeff @ ddT[:, :-1]).T
-                    jerk = (coeff @ dddT[:, :-1]).T
+                # higher order
                 else:
-                    pos = (coeff @ T).T
-                    vel = (coeff @ dT).T
-                    acc = (coeff @ ddT).T
-                    jerk = (coeff @ dddT).T
+                    deriv_fx = sym.simplify(sym.diff( deriv_fx , t, 1))
 
-                sub_traj = np.concatenate([pos, vel, acc, jerk], axis=-1)
-                full_traj.append(sub_traj)
+                # NOTE: This is a workaround in order to lambidfy matrices that contain constants.
+                if deriv_fx.is_constant():
+                    deriv_fx = deriv_fx + 1e-12*t
 
-            return np.concatenate(full_traj, axis=0)
-        
+                rows.append(deriv_fx)
+
+            mat_fx.append(rows)
+
+        function_matrix = sym.Matrix(mat_fx)      # num_control_points x num_deriv
+        print('Time to compute Bernstein coefficients:', time.time() - tnow)
+ 
+        self.bernstein_fx = sym.lambdify(t, function_matrix)
+
+        combo_scaling = scipy.special.comb(self.n, np.arange(self.n + 1))
+
+        self.coefficient_fx = lambda x: torch.tensor( (self.bernstein_fx(x.cpu().numpy()).transpose() * combo_scaling).transpose() , dtype=torch.float32).to(x.device)
+
+    def set_control_points(self, control_points, time_scale=None):
+        # control_points: tensor of shape (num_control_points, dim) or (num_splines, num_control_points, dim)
+        if control_points.ndim == 2:
+            assert control_points.shape == (self.n + 1, self.dim)
+            self.num_splines = 1
+
+        elif control_points.ndim == 3:
+            assert control_points.shape[1:] == (self.n + 1, self.dim)   
+            self.num_splines = control_points.shape[0]  
+
         else:
-            return None
+            raise ValueError('Invalid shape for control_points')
+
+        self.control_points = control_points
+
+        if time_scale is not None:
+            assert torch.numel(time_scale) == self.num_splines, 'Time scale must be a scalar or a tensor of shape (num_splines)'
+        
+        self.time_scale = time_scale            # NOTE: We don't check if time_scale is of valid shape!
+
+    # NOTE: We do not check if the time scale is of valid shape, or if the number of splines match the number of control points if you set it afterward!
+    def set_time_scale(self, time_scale):
+        self.num_splines = time_scale.numel()
+        self.time_scale = time_scale
+
+    def evaluate_coefficients(self, t):
+        # Evaluates the Bernstein coefficients at time t, where t is 1D tensor or 2D tensor
+        if t.ndim == 1:
+            coefficients = self.coefficient_fx(t).permute(2, 0, 1)       # num_t x num_control_points x num_deriv
+
+            if self.num_splines > 1:
+                coefficients = coefficients.unsqueeze(0).expand(self.num_splines, -1, -1, -1).permute(1, 2, 0, 3)       # num_t x num_control_points x num_splines x num_deriv
+
+        elif t.ndim == 2:
+            B, N = t.shape
+            coefficients = self.coefficient_fx(t.flatten())
+            coefficients = coefficients.reshape(self.n + 1, self.num_deriv + 1, B, N).permute(3, 0, 2, 1)       # num_t x num_control_points x num_splines x num_deriv
+
+        elif t.ndim > 2:
+            raise ValueError('Invalid shape for t')
+
+        else:   # scalar case
+            coefficients = self.coefficient_fx(t)
+
+        if (self.time_scale is not None):
+            time_scale = self.time_scale.unsqueeze(-1)
+            time_scaling = (1. / time_scale) ** torch.arange(self.num_deriv + 1, device=t.device).unsqueeze(0) # (opt: num_splines) x num_deriv
+            time_scaling = time_scaling.squeeze()
+
+            coefficients = coefficients * time_scaling 
+
+        if coefficients.ndim == 4:
+            coefficients = coefficients.permute(0, 2, 1, 3)
+
+        return coefficients
+
+    # NOTE: Make sure to set the control points before calling this function!
+    def evaluate(self, t):
+        # Evaluates the Bezier curve at time t, subject to batching (i.e. multiple splines) and time scaling
+        # t: scalar or 1D tensor or 2D tensor. NOTE THAT THESE t ARE NORMALIZED (i.e. PROGRESS PER SPLINE)
+        # output: array of shape (num_t, num_deriv, dim) or (num_splines, num_t, num_deriv, dim)
+
+        if t.ndim == 2:
+            assert t.shape[0] == self.num_splines, 'Number of splines must match the number of control points'
+
+        # Compute the Bernstein coefficients
+        coefficients = self.evaluate_coefficients(t)       # (opt: num_t) x (opt: num splines) x num_control_points x num_deriv
+
+        # Compute the Bezier curve subject to time scaling
+        if self.num_splines == 1:
+            output = torch.einsum('...ij, il -> ...jl', coefficients, self.control_points)
+        else:
+            output = torch.einsum('...bij, bil -> ...bjl', coefficients, self.control_points)
+        return output
+
+    # NOTE: Only works for scalar t
+    def evaluate_at_t(self, t):
+        assert t >= 0., 'Time must be non-negative'
+
+        # Finds the correct Bezier curve to evaluate t at. t is a scalar or 1D tensor representing where among the total time of the poly spline.
+        if self.time_scale is None:
+            # If no time scale is provided, we assume that the time is normalized between 0 and 1
+            spline_ind = np.clip(np.floor(t).astype(np.int32), 0, self.num_splines - 1)
+
+            spline_begin = torch.arange(self.num_splines, device=self.control_points.device)
+
+            normalized_t = t - spline_begin[spline_ind]
+
+        else:
+            spline_end = torch.cumsum(self.time_scale, dim=0)
+
+            t = np.clip(t, 0., spline_end[-1].item())       # Clip t to be within the total time of the poly spline
+
+            spline_ind = torch.searchsorted(spline_end, t, right=True)
+
+            spline_begin = torch.cat([torch.zeros(1, device=self.time_scale.device), spline_end[:-1]], dim=0)
+
+            spline_ind = torch.clip(spline_ind, 0, self.num_splines - 1)
+
+            normalized_t = (t - spline_begin[spline_ind]) / self.time_scale[spline_ind]
+
+        coefficients = self.coefficient_fx(normalized_t)       # num_control_points x num_deriv
+
+        if (self.time_scale is not None):
+            time_scale = self.time_scale[spline_ind].unsqueeze(-1)
+            time_scaling = (1. / time_scale) ** torch.arange(self.num_deriv + 1, device=self.control_points.device).unsqueeze(0) # num_deriv
+            time_scaling = time_scaling.squeeze()
+
+            coefficients = coefficients * time_scaling 
+
+        output = torch.einsum('ij, il -> jl', coefficients, self.control_points[spline_ind])
+
+        return output
