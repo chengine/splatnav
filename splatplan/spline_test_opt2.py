@@ -66,7 +66,7 @@ quiv_acc = ax.quiver(out[0, 0], out[0, 1], out[2, 0], out[2, 1], color='red', al
 title = ax.text(0.5,0.85, "", bbox={'facecolor':'w', 'alpha':0.5, 'pad':5},
                 transform=ax.transAxes, ha="center")
 
-ts = torch.linspace(0., time_scales.sum(), int(time_scales.sum() * 100))
+ts = torch.linspace(0., time_scales.sum(), int(time_scales.sum() * 15))
 data = [out]
 real = [current_position]
 
