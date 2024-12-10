@@ -24,7 +24,7 @@ from nerfstudio.cameras.cameras import Cameras, CameraType, RayBundle
 from nerfstudio.utils.eval_utils import eval_setup
 from nerfstudio.models.nerfacto import NerfactoModel
 from nerfstudio.models.splatfacto import SplatfactoModel
-from gemsplat.gemsplat import GemSplatModel
+# from gemsplat.gemsplat import GemSplatModel
 # from nerfstudio.scripts.render import RenderInterpolated
 
 from nerfstudio.data.dataparsers.nerfstudio_dataparser import NerfstudioDataParserConfig, Nerfstudio
@@ -143,7 +143,7 @@ class GaussianSplat():
 
             # insert ray bundles
             outputs['ray_bundle'] = camera_ray_bundle
-        elif isinstance(self.pipeline.model, SplatfactoModel) or isinstance(self.pipeline.model, GemSplatModel):
+        elif isinstance(self.pipeline.model, SplatfactoModel): # or isinstance(self.pipeline.model, GemSplatModel):
             obb_box = None
             
             tnow = time.perf_counter()
@@ -160,19 +160,19 @@ class GaussianSplat():
         return outputs
     
     def generate_point_cloud(self,
-                                use_bounding_box: bool = False,
-                                bounding_box_min: Optional[Tuple[float, float, float]] = (-1, -1, -1),
-                                bounding_box_max: Optional[Tuple[float, float, float]] = (1, 1, 1),
-                                densify_scene: bool = False,
-                                split_params: Dict = {
-                                    'n_split_samples': 2
-                                },
-                                cull_scene: bool = False,
-                                cull_params: Dict = {
-                                    'cull_alpha_thresh': 0.1,
-                                    'cull_scale_thresh': 0.5
-                                }
-                                )->None:
+                             use_bounding_box: bool = False,
+                             bounding_box_min: Optional[Tuple[float, float, float]] = (-1, -1, -1),
+                             bounding_box_max: Optional[Tuple[float, float, float]] = (1, 1, 1),
+                             densify_scene: bool = False,
+                             split_params: Dict = {
+                                 'n_split_samples': 2
+                             },
+                             cull_scene: bool = False,
+                             cull_params: Dict = {
+                                 'cull_alpha_thresh': 0.1,
+                                 'cull_scale_thresh': 0.5
+                             }
+                             )->None:
         if densify_scene:
             if cull_scene:
                 # cache the previous values of all parameters
@@ -182,12 +182,10 @@ class GaussianSplat():
                 features_dc_prev = self.pipeline.model.features_dc.clone()
                 features_rest_prev = self.pipeline.model.features_rest.clone()
                 opacities_prev = self.pipeline.model.opacities.clone()
-                
                 try:
                     clip_embeds_prev = self.pipeline.model.clip_embeds.clone()
-                except AttributeError:
-                    pass
-        
+                except:
+                    clip_embeds_prev = None
                 # cull Gaussians
                 self.pipeline.model.cull_gaussians_refinement(cull_alpha_thresh=cull_params['cull_alpha_thresh'],
                                                               cull_scale_thresh=cull_params['cull_scale_thresh'],
@@ -197,17 +195,16 @@ class GaussianSplat():
             split_mask = torch.ones(len(self.pipeline.model.scales),
                                     dtype=torch.bool).to(self.device)
 
-            # split Gaussians
             try:
-                means, features_dc, features_rest, opacities, scales, quats, clip_embeds \
+                # split Gaussians
+                means, features_dc, features_rest, opacities, scales, quats, \
+                clip_embeds \
                     = self.pipeline.model.split_gaussians(split_mask, split_params['n_split_samples'])
-            except AttributeError:
-                means, features_dc, features_rest, opacities, scales, quats \
+            except:
+                # split Gaussians
+                means, features_dc, features_rest, opacities, scales, quats, \
+                 \
                     = self.pipeline.model.split_gaussians(split_mask, split_params['n_split_samples'])
-                    
-                # extract the semantic embeddings
-                clip_embeds = self.pipeline.model.clip_field(self.pipeline.model.means).float().detach()
-
             
             # 3D points
             pcd_points = means
@@ -223,16 +220,15 @@ class GaussianSplat():
             # coefficient of the order 0th-term in the Spherical Harmonics basis
             pcd_colors_coeff = self.pipeline.model.features_dc
             
-            # other attributes of the Gaussian
-            opacities, scales, quats \
-                = self.pipeline.model.opacities, self.pipeline.model.scales, self.pipeline.model.quats
-                   
             try:
-                clip_embeds =  self.pipeline.model.clip_embeds
-            except AttributeError:
-                print('Clip embeds does not exist... querying means')
-                # extract the semantic embeddings
-                clip_embeds = self.pipeline.model.clip_field(self.pipeline.model.means / 10.).float().detach()
+                # other attributes of the Gaussian
+                opacities, scales, quats, clip_embeds \
+                    = self.pipeline.model.opacities, self.pipeline.model.scales, self.pipeline.model.quats, \
+                        self.pipeline.model.clip_embeds
+            except:
+                # other attributes of the Gaussian
+                opacities, scales, quats \
+                    = self.pipeline.model.opacities, self.pipeline.model.scales, self.pipeline.model.quats
 
         # color computed from the Spherical Harmonics
         pcd_colors = SH2RGB(pcd_colors_coeff).squeeze()
@@ -247,10 +243,15 @@ class GaussianSplat():
             pcd_points = pcd_points[mask]
             pcd_colors = pcd_colors[mask]
             
-            # other attributes of the Gaussian
-            opacities, scales, quats, clip_embeds \
-                = opacities[mask], scales, quats[mask], clip_embeds[mask]
-            torch.cuda.empty_cache()
+            try:
+                # other attributes of the Gaussian
+                opacities, scales, quats, clip_embeds \
+                    = opacities[mask], scales, quats[mask], clip_embeds[mask]
+            except:
+                # other attributes of the Gaussian
+                opacities, scales, quats, clip_embeds \
+                    = opacities[mask], scales, quats[mask], None
+                    
         else:
             mask = None
             
@@ -263,8 +264,7 @@ class GaussianSplat():
                     'quats': quats,
                     'scales': scales,
                     'opacities': opacities,
-                    'clip_embeds': clip_embeds
-                    }
+                    'clip_embeds': clip_embeds}
 
         # create the point cloud
         pcd = o3d.geometry.PointCloud()
@@ -279,12 +279,11 @@ class GaussianSplat():
             self.pipeline.model.features_dc = torch.nn.Parameter(features_dc_prev)
             self.pipeline.model.features_rest = torch.nn.Parameter(features_rest_prev)
             self.pipeline.model.opacities = torch.nn.Parameter(opacities_prev)
-            
             try:
                 self.pipeline.model.clip_embeds = torch.nn.Parameter(clip_embeds_prev)
-            except AttributeError:
+            except:
                 pass
-
+                
         return pcd, mask, env_attr
     
     def get_semantic_point_cloud(self,
@@ -304,16 +303,10 @@ class GaussianSplat():
         if 'clip_embeds' in pcd_attr.keys():
             pcd_clip = pcd_attr['clip_embeds']
         else:
-            try:
-                pcd_clip = self.pipeline.model.clip_embeds
-            except AttributeError:
-                print('here')
-                # extract the semantic embeddings
-                ### NOTE: IMPORTANT !!! HARD CODED DIVISION BY 10 INTO POSITIONS ###
-                pcd_clip = self.pipeline.model.clip_field(self.pipeline.model.means).float().detach()
-
+            pcd_clip = self.pipeline.model.clip_embeds
+        
         # get the semantic outputs
-        pcd_clip = {'clip': pcd_clip}
+        pcd_clip = {'clip': pcd_clip, }
         semantic_pcd = self.pipeline.model.get_semantic_outputs(pcd_clip)
         
         return semantic_pcd

@@ -257,7 +257,7 @@ class SplatLoc():
                                                 camera_intrinsics_K=cam_K,
                                                 rgb_input=cam_rgb,
                                                 feature_detector=self.feature_detector,
-                                                save_image=False,
+                                                save_image=True,
                                                 pnp_figure_filename=f'{self.figures_dir}/pnp_init_guess.png',
                                                 print_stats=True,
                                                 visualize_PnP_matches=False,

@@ -142,7 +142,7 @@ class SplatPlan():
             'path': path.tolist(),
             'polytopes': [torch.cat([polytope[0], polytope[1].unsqueeze(-1)], dim=-1).tolist() for polytope in polytopes],
             'num_polytopes': len(polytopes),
-            'traj': traj.reshape(-1, x0.shape[-1]).tolist(),
+            'traj': traj.tolist(),
             'times_astar': time_astar,
             'times_collision_set': times_collision_set,
             'times_polytope': times_polytope,
