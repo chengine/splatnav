@@ -135,7 +135,7 @@ class SplatPlan():
         
         return traj_data
     
-    # t is some wall clock time. This function does multiple things. If x0 is None, it will simply query the waypoint at time t along the poly spline.
+    # TODO:t is some wall clock time. This function does multiple things. If x0 is None, it will simply query the waypoint at time t along the poly spline.
     # If x0 is not None, then t is used to check which spline / polytope the robot should be in, then projects x0 onto the polytope.
     # Then, the optimizer will locally resolve for a spline in the current polytope from x0 to the last control point of the original spline for continuity.
     def query_waypoint(self, t, x0=None, solve_all=False):

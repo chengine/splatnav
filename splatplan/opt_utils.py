@@ -108,8 +108,7 @@ class SplineOptimizer():
             print('Clarabel did not solve the problem!')
             solver_success = False
             control_points = None
-        
-        # TODO
+
         else:
             solver_success = True
             control_points = torch.tensor(sol.x, device=self.device)
