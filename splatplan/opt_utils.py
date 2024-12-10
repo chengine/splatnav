@@ -134,7 +134,7 @@ class SplineOptimizer():
         return output
 
     # TODO: At some wall clock time t, given the state, locally construct the Bezier curve linking to the next spline
-    def solve_local_waypoint(self, query_t, t, x0, solve_all=False):
+    def solve_local_waypoint(self, query_t, t, x0, solve_all=True):
         if x0.ndim == 1:
             x0 = x0[None, :]
 

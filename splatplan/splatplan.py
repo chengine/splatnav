@@ -139,12 +139,12 @@ class SplatPlan():
     # If x0 is not None, then t is used to check which spline / polytope the robot should be in, then projects x0 onto the polytope.
     # Then, the optimizer will locally resolve for a spline in the current polytope from x0 to the last control point of the original spline for continuity.
     # TODO: REMEMBER TO HAVE TO PASS IN NEXT TIME POINT.
-    def query_waypoint(self, t, x0=None, solve_all=False):
+    def query_waypoint(self, t_query, t=None, x0=None):
         if x0 is None:
-            output = self.spline_planner.evaluate_bspline_at_t(t)       # num_deriv x ndim
+            output = self.spline_planner.evaluate_bspline_at_t(t_query)       # num_deriv x ndim
         else:
             # Solve all solves all bsplines from t to the end of the spline. If not, just locally solves the current bspline.
-            output = self.spline_planner.solve_local_waypoint(t, x0, solve_all)    # num_deriv x ndim
+            output, solver_success, meta = self.spline_planner.solve_local_waypoint(t_query, t, x0)    # num_deriv x ndim
         return output
     
     def get_polytope_from_outputs(self, data):
