@@ -66,7 +66,7 @@ quiv_acc = ax.quiver(out[0, 0], out[0, 1], out[2, 0], out[2, 1], color='red', al
 title = ax.text(0.5,0.85, "", bbox={'facecolor':'w', 'alpha':0.5, 'pad':5},
                 transform=ax.transAxes, ha="center")
 
-ts = torch.linspace(0., time_scales.sum(), int(time_scales.sum() * 15))
+ts = torch.linspace(0., time_scales.sum(), int(time_scales.sum() * 30))
 data = [out]
 real = [current_position]
 
@@ -83,7 +83,7 @@ def update(frame):
 
     tnow = time.time()
     torch.cuda.synchronize()
-    out, success, meta = spline_optimizer.solve_local_waypoint(ts[frame+1].item(), ts[frame].item(), torch.tensor(x0, device='cuda'), solve_all=True)
+    out, success, meta = spline_optimizer.solve_local_waypoint(ts[frame+1].item(), ts[frame].item(), torch.tensor(x0, device='cuda'))
     torch.cuda.synchronize()
     print('Elapsed', time.time() - tnow)
 
@@ -96,17 +96,6 @@ def update(frame):
 
     if success:
         print('Cost: ', meta['cost'])
-        # if frame == 10:
-        #     control_points_ = meta['control_points']
-        #     control_points, success = spline_optimizer.optimize_bspline(polytopes, torch.tensor(x0, device='cuda'), xf, time_scales)
-        #     print(control_points_.shape)
-        #     print(control_points.shape)
-
-        #     print(torch.allclose(control_points_, control_points))
-        #     print(control_points)
-        #     print(control_points_)
-        #     raise
-
         print('Success')
         
         out = out.cpu().numpy()

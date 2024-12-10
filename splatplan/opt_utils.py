@@ -133,8 +133,8 @@ class SplineOptimizer():
         output = self.bspline.evaluate(t)
         return output
 
-    # TODO: At some wall clock time t, given the state, locally construct the Bezier curve linking to the next spline
-    def solve_local_waypoint(self, query_t, t, x0, solve_all=True):
+    # At some wall clock time t, given the state, locally construct the Bezier curve linking to the next spline
+    def solve_local_waypoint(self, query_t, t, x0):
         if x0.ndim == 1:
             x0 = x0[None, :]
 
@@ -160,9 +160,6 @@ class SplineOptimizer():
 
             progress_along_spline = (t - spline_begin[spline_ind]) / self.time_scales[spline_ind]
 
-        # if spline_ind == self.num_splines - 1:
-        #     solve_all = False
-
         polytope = self.polytopes[spline_ind]
 
         # First project the state x0 into the first polytope
@@ -177,68 +174,27 @@ class SplineOptimizer():
             x0[0] = torch.tensor(projected_x0, device=self.device, dtype=torch.float32)
 
         # Solves for the spline from the current polytope all the way to the end
-        if solve_all:
-            # progress_eval_points_global = torch.tensor([0., 1.], device=self.device)#[None, :].expand(self.num_splines, 2)
+        progress_eval_points = torch.tensor([0., 1.], device=self.device)[None, :].expand(self.num_splines, 2)       # num_splines x 2
+        bernstein_coefficients = self.bspline.evaluate_coefficients(progress_eval_points)  # num_t x num_splines x num_control_points x num_deriv
 
-            # progress_eval_points = torch.tensor([progress_along_spline, 1.], device=self.device)#[None, :].expand(self.num_splines, 2)
+        #Set up matrices
+        A, b, C, d, Q = get_qp_matrices(bernstein_coefficients, self.polytopes, self.x0, self.xf)
 
-            # # TODO: There's a faster way to do this without having to querying these eval points for every spline when we only care about one
-            # bernstein_coefficients = self.bspline.evaluate_coefficients(progress_eval_points)  # num_t x num_splines x num_control_points x num_deriv
-            
-            # # Only keep the coefficients that are at the current spline and onwards
-            # bernstein_coefficients_global = self.bspline.evaluate_coefficients(progress_eval_points_global)  # num_t x num_splines x num_control_points x num_deriv
-            # bernstein_coefficients_global[:, spline_ind, :, :] = bernstein_coefficients[:, spline_ind, :, :]
-            # bernstein_coefficients_global = bernstein_coefficients_global[:, spline_ind:, :, :]
-            # polytopes = self.polytopes[spline_ind:]
+        # TODO: There's a faster way to do this without having to querying these eval points for every spline when we only care about one
+        progress_eval_points = torch.tensor([progress_along_spline, 1.], device=self.device)[None, :]
+        bernstein_coefficients = self.bspline.evaluate_coefficients(progress_eval_points)[0]  # num_splines x num_control_points x num_deriv
+        C_, d_ = get_continuity_at_point(bernstein_coefficients, x0, spline_ind)
 
-            # A, b, C, d, Q = get_qp_matrices(bernstein_coefficients_global, polytopes, x0, self.xf)
+        # C[-C_.shape[0]:, :] = C_
+        # d[-d_.shape[0]:] = d_
 
-            progress_eval_points = torch.tensor([0., 1.], device=self.device)[None, :].expand(self.num_splines, 2)       # num_splines x 2
-            bernstein_coefficients = self.bspline.evaluate_coefficients(progress_eval_points)  # num_t x num_splines x num_control_points x num_deriv
+        # C = torch.cat([C, C_], dim=0)
+        # d = torch.cat([d, d_], dim=0)
 
-            #Set up matrices
-            A, b, C, d, Q = get_qp_matrices(bernstein_coefficients, self.polytopes, self.x0, self.xf)
-
-            # # # TODO: There's a faster way to do this without having to querying these eval points for every spline when we only care about one
-            progress_eval_points = torch.tensor([progress_along_spline, 1.], device=self.device)[None, :]
-            bernstein_coefficients = self.bspline.evaluate_coefficients(progress_eval_points)[0]  # num_splines x num_control_points x num_deriv
-            C_, d_ = get_continuity_at_point(bernstein_coefficients, x0, spline_ind)
-
-            # C[-C_.shape[0]:, :] = C_
-            # d[-d_.shape[0]:] = d_
-
-            # C = torch.cat([C, C_], dim=0)
-            # d = torch.cat([d, d_], dim=0)
-
-            # Add continuity of current point in the cost
-            Q_ = C_.T @ C_
-            Q = Q + Q_
-            w = -C_.T @ d_
-
-        else:
-            # Needs more debugging
-            raise NotImplementedError
-            progress_eval_points = torch.tensor([progress_along_spline, 1.], device=self.device).expand(self.num_splines, 2)
-
-            # TODO: There's a faster way to do this without having to querying these eval points for every spline when we only care about one
-            bernstein_coefficients = self.bspline.evaluate_coefficients(progress_eval_points)  # num_t x num_splines x num_control_points x num_deriv
-            bernstein_coefficients = bernstein_coefficients[:, spline_ind, :, :]
-
-            # We want the spline to be continuous with the existing poly spline starting at the next time step
-            #xf = self.bspline.evaluate_at_t(spline_end[spline_ind].item())
-
-            # projected_xf, success = project_point_into_polytope(A_x0.cpu().numpy(), b_x0.cpu().numpy(), xf[0].cpu().numpy())
-            # xf[0] = torch.tensor(projected_xf, device=self.device)
-
-            xf = self.control_points[spline_ind, -1][None, :]
-
-            # diff = torch.linalg.norm(xf - self.control_points[spline_ind, -1][None, :], axis=-1).item()
-
-            # if diff > 1e-3:
-            #     print()
-            #     raise
-
-            A, b, C, d, Q = get_single_spline_matrices(bernstein_coefficients, polytope, x0, xf)
+        # Add continuity of current point in the cost
+        Q_ = C_.T @ C_
+        Q = Q + Q_
+        w = -C_.T @ d_
 
         n_var = C.shape[-1]
         #w = np.zeros(n_var)
@@ -277,18 +233,12 @@ class SplineOptimizer():
             solver_success = True
             control_points = torch.tensor(sol.x, device=self.device)
             control_points_all = self.control_points.clone()
-            if solve_all:
-                control_points = control_points.reshape(-1, self.num_control_points, self.dim)
-                control_points_all[spline_ind:] = control_points[spline_ind:]
 
-            else:
-                raise NotImplementedError
-                control_points = control_points.reshape(self.num_control_points, self.dim)
-                control_points_all[spline_ind] = control_points
+            control_points = control_points.reshape(-1, self.num_control_points, self.dim)
+            control_points_all[spline_ind:] = control_points[spline_ind:]
 
             self.bspline.set_control_points(control_points_all, self.time_scales)
-            output = self.bspline.evaluate_at_t(query_t)#+ (t - spline_begin[spline_ind].item()))
-            #self.control_points = control_points_all
+            output = self.bspline.evaluate_at_t(query_t)
 
             # NOTE: IMPORTANT! REMEMBER TO SET THE CONTROL POINTS BACK!
             self.bspline.set_control_points(self.control_points, self.time_scales)

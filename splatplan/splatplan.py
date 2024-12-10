@@ -69,6 +69,8 @@ class SplatPlan():
         polytopes = []      # List of polytopes (A, b)
         segments = torch.tensor(np.stack([path[:-1], path[1:]], axis=1), device=self.device)
 
+        # Step 2: Iterate through the segments and compute the polytopes
+        segment_chunks = []
         for it, segment in enumerate(segments):
 
             # Test if the current segment is in the most recent polytope
@@ -101,13 +103,27 @@ class SplatPlan():
 
                 polytopes.append(polytope)
 
+                if it > 0:
+                    segment_chunks.append(chunk)
+
+                # Start a new chunk
+                chunk = [it]
+
+            else:
+                chunk.append(it)
+        segment_chunks.append(chunk)
+
+        assert len(segment_chunks) == len(polytopes)
+        assert np.allclose(np.concatenate(segment_chunks).shape[0] , np.arange(len(segments)))
+
         # Step 4: Perform Bezier spline optimization
         tnow = time.time()
         torch.cuda.synchronize()
 
         # Time scale of each part of the poly spline
         segment_lengths = torch.linalg.norm(segments[:, 1] - segments[:, 0], dim=-1)
-        time_scale = segment_lengths / self.vmax
+        chunk_lengths = torch.tensor([torch.sum(segment_lengths[chunk]) for chunk in segment_chunks], device=self.device)
+        time_scale = chunk_lengths / self.vmax
 
         # Solve
         _, feasible = self.spline_planner.optimize_bspline(polytopes, x0, xf, time_scale)
@@ -116,6 +132,7 @@ class SplatPlan():
             # self.save_polytope(polytopes, 'infeasible.obj')
             #print(compute_segment_in_polytope(polytope[0], polytope[1], segments[-1]))
             raise ValueError('Infeasible path!')
+            
         traj = self.spline_planner.evaluate_bspline(torch.linspace(0., 1., 10, device=self.device))
         torch.cuda.synchronize()
         times_opt = time.time() - tnow
@@ -135,10 +152,9 @@ class SplatPlan():
         
         return traj_data
     
-    # TODO:t is some wall clock time. This function does multiple things. If x0 is None, it will simply query the waypoint at time t along the poly spline.
+    # t is some wall clock time. This function does multiple things. If x0 is None, it will simply query the waypoint at time t along the poly spline.
     # If x0 is not None, then t is used to check which spline / polytope the robot should be in, then projects x0 onto the polytope.
     # Then, the optimizer will locally resolve for a spline in the current polytope from x0 to the last control point of the original spline for continuity.
-    # TODO: REMEMBER TO HAVE TO PASS IN NEXT TIME POINT.
     def query_waypoint(self, t_query, t=None, x0=None):
         if x0 is None:
             output = self.spline_planner.evaluate_bspline_at_t(t_query)       # num_deriv x ndim
