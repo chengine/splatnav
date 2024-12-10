@@ -161,6 +161,10 @@ class BezierCurve():
 
             coefficients = coefficients * time_scaling 
 
+        # print(coefficients)
+        # print(self.control_points[spline_ind])
+        # print(normalized_t)
+
         output = torch.einsum('ij, il -> jl', coefficients, self.control_points[spline_ind])
 
         return output

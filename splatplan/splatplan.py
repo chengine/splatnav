@@ -47,11 +47,18 @@ class SplatPlan():
         self.times_prune = []
 
     def generate_path(self, x0, xf):
+        # x0 should be n x ndim tensor, where n is the position and its derivatives (n=1 for just position)
+        # xf should be n x ndim tensor
+
+        # Take the position component
+        p0 = x0[0]
+        pf = xf[0]
+
         # Part 1: Computes the path seed using A*
         tnow = time.time()
         torch.cuda.synchronize()
 
-        path = self.gsplat_voxel.create_path(x0, xf)
+        path = self.gsplat_voxel.create_path(p0, pf)
 
         torch.cuda.synchronize()
         time_astar = time.time() - tnow
@@ -98,15 +105,18 @@ class SplatPlan():
         tnow = time.time()
         torch.cuda.synchronize()
 
-        # TODO: ADD x0 and xf FOR FULL STATE AND HIGHER ORDER DERIVATIVES. ADD IN TIME SCALE BASED ON VMAX.
-        # EVEN IF x0, xf are not feasible, the planner automatically projects them into the polytope!
-        traj, feasible = self.spline_planner.optimize_bspline(polytopes, x0, xf, time_scale)
+        # Time scale of each part of the poly spline
+        segment_lengths = torch.linalg.norm(segments[:, 1] - segments[:, 0], dim=-1)
+        time_scale = segment_lengths / self.vmax
+
+        # Solve
+        _, feasible = self.spline_planner.optimize_bspline(polytopes, x0, xf, time_scale)
         if not feasible:
             #traj = torch.stack([x0, xf], dim=0)
             # self.save_polytope(polytopes, 'infeasible.obj')
             #print(compute_segment_in_polytope(polytope[0], polytope[1], segments[-1]))
             raise ValueError('Infeasible path!')
-
+        traj = self.spline_planner.evaluate_bspline(torch.linspace(0., 1., 10, device=self.device))
         torch.cuda.synchronize()
         times_opt = time.time() - tnow
   
@@ -115,7 +125,7 @@ class SplatPlan():
             'path': path.tolist(),
             'polytopes': [torch.cat([polytope[0], polytope[1].unsqueeze(-1)], dim=-1).tolist() for polytope in polytopes],
             'num_polytopes': len(polytopes),
-            'traj': traj.tolist(),
+            'traj': traj.reshape(-1, x0.shape[-1]).tolist(),
             'times_astar': time_astar,
             'times_collision_set': times_collision_set,
             'times_polytope': times_polytope,
@@ -124,6 +134,17 @@ class SplatPlan():
         }
         
         return traj_data
+    
+    # t is some wall clock time. This function does multiple things. If x0 is None, it will simply query the waypoint at time t along the poly spline.
+    # If x0 is not None, then t is used to check which spline / polytope the robot should be in, then projects x0 onto the polytope.
+    # Then, the optimizer will locally resolve for a spline in the current polytope from x0 to the last control point of the original spline for continuity.
+    def query_waypoint(self, t, x0=None, solve_all=False):
+        if x0 is None:
+            output = self.spline_planner.evaluate_bspline_at_t(t)       # num_deriv x ndim
+        else:
+            # Solve all solves all bsplines from t to the end of the spline. If not, just locally solves the current bspline.
+            output = self.spline_planner.solve_local_waypoint(t, x0, solve_all)    # num_deriv x ndim
+        return output
     
     def get_polytope_from_outputs(self, data):
         # For every single line segment, we always create a polytope at the first line segment, 
