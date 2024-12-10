@@ -138,6 +138,7 @@ class SplatPlan():
     # TODO:t is some wall clock time. This function does multiple things. If x0 is None, it will simply query the waypoint at time t along the poly spline.
     # If x0 is not None, then t is used to check which spline / polytope the robot should be in, then projects x0 onto the polytope.
     # Then, the optimizer will locally resolve for a spline in the current polytope from x0 to the last control point of the original spline for continuity.
+    # TODO: REMEMBER TO HAVE TO PASS IN NEXT TIME POINT.
     def query_waypoint(self, t, x0=None, solve_all=False):
         if x0 is None:
             output = self.spline_planner.evaluate_bspline_at_t(t)       # num_deriv x ndim
