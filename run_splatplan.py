@@ -33,7 +33,7 @@ sparse = False
 
 for sparse in [False, True]:
     for scene_name in ['stonehenge', 'statues', 'flight', 'old_union']:
-        for method in ['sfc-1', 'sfc-2']:
+        for method in ['splatplan']:
 
             # NOTE: POPULATE THE UPPER AND LOWER BOUNDS FOR OTHER SCENES!!!
             if scene_name == 'old_union':
@@ -178,6 +178,7 @@ for sparse in [False, True]:
                 total_data.append(output)
                 print(f"Trial {trial} completed")
 
+                raise
             # Save trajectory
             data = {
                 'scene': scene_name,
@@ -196,15 +197,17 @@ for sparse in [False, True]:
             }
 
             # create directory if it doesn't exist
-            os.makedirs('trajs', exist_ok=True)
+            os.makedirs('trajs_test', exist_ok=True)
             
             # write to the file
             if sparse:
-                save_path = f'trajs/{scene_name}_sparse_{method}.json'
+                save_path = f'trajs_test/{scene_name}_sparse_{method}.json'
             else:
-                save_path = f'trajs/{scene_name}_{method}.json'
+                save_path = f'trajs_test/{scene_name}_{method}.json'
             
             with open(save_path, 'w') as f:
                 json.dump(data, f, indent=4)
+
+            raise
         
 # %%

@@ -230,6 +230,7 @@ class SplinePlanner():
         N_sections = len(polytopes)         #Number of segments
 
         T = self.time_pts['time_pts']
+        print(T)
         dT = self.time_pts['d_time_pts']
         ddT = self.time_pts['dd_time_pts']
         dddT = self.time_pts['ddd_time_pts']

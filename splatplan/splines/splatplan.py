@@ -1,0 +1,531 @@
+import torch
+import numpy as np
+import open3d as o3d
+import scipy
+import time
+
+from polytopes.polytopes_utils import h_rep_minimal, find_interior, compute_segment_in_polytope
+from initialization.grid_utils import GSplatVoxel
+from polytopes.collision_set import GSplatCollisionSet, ellipsoid_halfspace_intersection
+from polytopes.decomposition import compute_polytope
+from ellipsoids.intersection_utils import compute_intersection_linear_motion
+
+# class SplatPlan():
+#     def __init__(self, gsplat, robot_config, env_config, spline_planner, device):
+#         # gsplat: GSplat object
+
+#         self.gsplat = gsplat
+#         self.device = device
+
+#         # Robot configuration
+#         self.radius = robot_config['radius']
+#         self.vmax = robot_config['vmax']
+#         self.amax = robot_config['amax']
+#         self.collision_set = GSplatCollisionSet(self.gsplat, self.vmax, self.amax, self.radius, self.device)
+
+#         # Environment configuration (specifically voxel)
+#         self.lower_bound = env_config['lower_bound']
+#         self.upper_bound = env_config['upper_bound']
+#         self.resolution = env_config['resolution']
+
+#         tnow = time.time()
+#         torch.cuda.synchronize()
+#         self.gsplat_voxel = GSplatVoxel(self.gsplat, lower_bound=self.lower_bound, upper_bound=self.upper_bound, resolution=self.resolution, radius=self.radius, device=device)
+#         torch.cuda.synchronize()
+#         print('Time to create GSplatVoxel:', time.time() - tnow)
+
+#         # Spline planner
+#         self.spline_planner = spline_planner
+
+#         # Save the mesh
+#         # gsplat_voxel.create_mesh(save_path=save_path)
+#         # gsplat.save_mesh(scene_name + '_gsplat.obj')
+
+#         # Record times
+#         self.times_cbf = []
+#         self.times_qp = []
+#         self.times_prune = []
+
+#     def generate_path(self, x0, xf):
+#         # Part 1: Computes the path seed using A*
+#         tnow = time.time()
+#         torch.cuda.synchronize()
+
+#         path = self.gsplat_voxel.create_path(x0, xf)
+
+#         torch.cuda.synchronize()
+#         time_astar = time.time() - tnow
+
+#         times_collision_set = 0
+#         times_polytope = 0
+
+#         polytopes = []      # List of polytopes (A, b)
+#         segments = torch.tensor(np.stack([path[:-1], path[1:]], axis=1), device=self.device)
+
+#         for it, segment in enumerate(segments):
+
+#             # Test if the current segment is in the most recent polytope
+#             if it > 0:
+#                 is_in_polytope = compute_segment_in_polytope(polytope[0], polytope[1], segment)
+#             else:
+#                 #If we haven't created a polytope yet, so we set it to False.
+#                 is_in_polytope = False
+
+#             # If this is the first line segment, we always create a polytope. Or subsequently, we only instantiate a polytope if the line segment
+#             if (it == 0) or (it == len(segments) - 1) or (not is_in_polytope):
+
+#                 # Part 2: Computes the collision set
+#                 tnow = time.time()
+#                 torch.cuda.synchronize()
+                
+#                 output = self.collision_set.compute_set_one_step(segment)
+
+#                 torch.cuda.synchronize()
+#                 times_collision_set += time.time() - tnow
+
+#                 # Part 3: Computes the polytope
+#                 tnow = time.time()
+#                 torch.cuda.synchronize()
+
+#                 polytope = self.get_polytope_from_outputs(output)
+
+#                 torch.cuda.synchronize()
+#                 times_polytope += time.time() - tnow
+
+#                 polytopes.append(polytope)
+
+#         # Step 4: Perform Bezier spline optimization
+#         tnow = time.time()
+#         torch.cuda.synchronize()
+
+#         time_scale = torch.ones(len(polytopes), device=self.device)
+#         _, feasible = self.spline_planner.optimize_bspline(polytopes, segments[0][0], segments[-1][-1], time_scale)
+
+#         traj = self.spline_planner.evaluate_bspline(torch.linspace(0., 1., 10, device=self.device))
+#         traj = traj.permute((1, 0, 2, 3))
+#         traj = traj.reshape(-1, self.spline_planner.num_deriv + 1, self.spline_planner.dim)
+
+#         torch.cuda.synchronize()
+#         times_opt = time.time() - tnow
+  
+#         # Save outgoing information
+#         traj_data = {
+#             'path': path.tolist(),
+#             'polytopes': [torch.cat([polytope[0], polytope[1].unsqueeze(-1)], dim=-1).tolist() for polytope in polytopes],
+#             'num_polytopes': len(polytopes),
+#             'traj': traj.tolist(),
+#             'times_astar': time_astar,
+#             'times_collision_set': times_collision_set,
+#             'times_polytope': times_polytope,
+#             'times_opt': times_opt,
+#             'feasible': feasible
+#         }
+
+#         # self.save_polytope(polytopes, 'feasible.obj')
+        
+#         return traj_data
+    
+#     def get_polytope_from_outputs(self, data):
+#         # For every single line segment, we always create a polytope at the first line segment, 
+#         # and then we subsequently check if future line segments are within the polytope before creating new ones.
+#         gs_ids = data['primitive_ids']
+
+#         A_bb = data['A_bb']
+#         b_bb = data['b_bb_shrunk']
+#         segment = data['path']
+#         delta_x = segment[1] - segment[0]
+
+#         midpoint = data['midpoint']
+
+#         if len(gs_ids) == 0:
+#             return (A_bb, b_bb)
+        
+#         elif len(gs_ids) == 1:
+#             rots = data['rots']
+#             scales = data['scales']
+#             means = data['means']
+
+#         else:
+#             rots = data['rots']
+#             scales = data['scales']
+#             means = data['means']
+
+#         # Perform the intersection test
+#         intersection_output = compute_intersection_linear_motion(segment[0], delta_x, rots, scales, means, 
+#                                 R_B=None, S_B=self.radius, collision_type='sphere', 
+#                                 mode='bisection', N=10)
+
+#         # With the intersections computed, we can iterate through them and keep a minimal amount of halfspaces
+
+#         A = []
+#         b = []
+
+#         # Loop until we have no more Gaussian intersections.
+#         # The idea here is very similar to that done in SFC. For them, they use the Mahalanobis distance to scale their ellipsoid until it 
+#         # reaches the first intersection point, create a halfplane there, segment out the points on the wrong side of the halfplane, and then repeat.
+
+#         # Instead, we use K_opt as this scaling factor, calculate the halfplane, then inflate the halfplane by the radius of the robot. If the halfplane
+#         # does not contain these ellipsoids, then we can safely ignore them. If it does, then we keep them in the queue.
+
+#         deltas = intersection_output['deltas']
+#         Q_opt = intersection_output['Q_opt']
+#         K_opt = intersection_output['K_opt']
+#         mu_A = intersection_output['mu_A']
+
+#         if K_opt.numel() == 1:
+#             A_cut, b_cut, _ = compute_polytope(deltas, Q_opt.unsqueeze(0), K_opt.unsqueeze(0), mu_A)
+#             A.append(A_cut)
+#             b.append(b_cut)
+
+#         else:
+#             while len(K_opt) > 0:
+            
+#                 # Find the minimum distance point
+#                 min_K, min_idx = torch.min(K_opt, dim=0)
+
+#                 # Compute the halfspace for the min distance ellipsoid
+#                 A_cut, b_cut, _ = compute_polytope(deltas[min_idx].unsqueeze(0), Q_opt[min_idx].unsqueeze(0), min_K.unsqueeze(0), mu_A[min_idx].unsqueeze(0))
+    
+#                 # Find all ellipsoids that are inside the halfspace. Remember that this halfspace is inflated!
+#                 A_cut_inflated = A_cut / torch.linalg.norm(A_cut, dim=-1, keepdim=True)
+#                 b_cut_inflated = b_cut / torch.linalg.norm(A_cut, dim=-1)
+#                 b_cut_inflated = b_cut_inflated + self.radius
+
+#                 keep_gaussians = ellipsoid_halfspace_intersection(means, rots, scales, A_cut_inflated.unsqueeze(0), b_cut_inflated)
+
+#                 # Keep track of the mask with segmented out ellipsoids and the min distance point!
+#                 keep_gaussians[min_idx] = False
+
+#                 # TODO: I think means is the same as mu_A, so we can remove one of them.
+#                 deltas = deltas[keep_gaussians]
+#                 Q_opt = Q_opt[keep_gaussians]
+#                 K_opt = K_opt[keep_gaussians]
+#                 mu_A = mu_A[keep_gaussians]
+#                 rots = rots[keep_gaussians]
+#                 scales = scales[keep_gaussians]
+#                 means = means[keep_gaussians]
+
+#                 # Append the halfspace to the list
+#                 A.append(A_cut)
+#                 b.append(b_cut)
+
+#         A = torch.stack(A, dim=0).reshape(-1, deltas.shape[-1])
+#         b = torch.stack(b, dim=0).reshape(-1, )
+
+#         # The full polytope is a concatenation of the intersection polytope and the bounding box polytope
+#         A = torch.cat([A, A_bb], dim=0)
+#         b = torch.cat([b, b_bb], dim=0)
+
+#         norm_A = torch.linalg.norm(A, dim=-1, keepdims=True)
+#         A = A / norm_A
+#         b = b / norm_A.squeeze()
+
+#         return (A, b)
+
+#     def save_polytope(self, polytopes, save_path):
+#         # Initialize mesh object
+#         mesh = o3d.geometry.TriangleMesh()
+
+#         for (A, b) in polytopes:
+#             # Transfer all tensors to numpy
+#             A = A.cpu().numpy()
+#             b = b.cpu().numpy()
+
+#             pt = find_interior(A, b)
+
+#             halfspaces = np.concatenate([A, -b[..., None]], axis=-1)
+#             hs = scipy.spatial.HalfspaceIntersection(halfspaces, pt, incremental=False, qhull_options=None)
+#             qhull_pts = hs.intersections
+
+#             pcd_object = o3d.geometry.PointCloud()
+#             pcd_object.points = o3d.utility.Vector3dVector(qhull_pts)
+#             bb_mesh, qhull_indices = pcd_object.compute_convex_hull()
+#             mesh += bb_mesh
+        
+#         success = o3d.io.write_triangle_mesh(save_path, mesh, print_progress=True)
+
+#         return success
+
+
+class SplatPlan():
+    def __init__(self, gsplat, robot_config, env_config, spline_planner, device):
+        # gsplat: GSplat object
+
+        self.gsplat = gsplat
+        self.device = device
+
+        # Robot configuration
+        self.radius = robot_config['radius']
+        self.vmax = robot_config['vmax']
+        self.amax = robot_config['amax']
+        self.collision_set = GSplatCollisionSet(self.gsplat, self.vmax, self.amax, self.radius, self.device)
+
+        # Environment configuration (specifically voxel)
+        self.lower_bound = env_config['lower_bound']
+        self.upper_bound = env_config['upper_bound']
+        self.resolution = env_config['resolution']
+
+        tnow = time.time()
+        self.gsplat_voxel = GSplatVoxel(self.gsplat, lower_bound=self.lower_bound, upper_bound=self.upper_bound, resolution=self.resolution, radius=self.radius, device=device)
+        print('Time to create GSplatVoxel:', time.time() - tnow)
+
+        # Spline planner
+        self.spline_planner = spline_planner
+
+        # Save the mesh
+        # gsplat_voxel.create_mesh(save_path=save_path)
+        # gsplat.save_mesh(scene_name + '_gsplat.obj')
+
+        # Record times
+        self.times_cbf = []
+        self.times_qp = []
+        self.times_prune = []
+
+    def generate_path(self, x0, xf):
+        # x0 should be n x ndim tensor, where n is the position and its derivatives (n=1 for just position)
+        # xf should be n x ndim tensor
+
+        # Take the position component
+        if x0.ndim == 1:
+            x0 = x0.unsqueeze(0)
+        if xf.ndim == 1:
+            xf = xf.unsqueeze(0)
+
+        p0 = x0[0]
+        pf = xf[0]
+
+        # Part 1: Computes the path seed using A*
+        tnow = time.time()
+
+        path = self.gsplat_voxel.create_path(p0, pf)
+
+        time_astar = time.time() - tnow
+
+        times_collision_set = 0
+        times_polytope = 0
+
+        polytopes = []      # List of polytopes (A, b)
+        segments = torch.tensor(np.stack([path[:-1], path[1:]], axis=1), device=self.device)
+
+        # Step 2: Iterate through the segments and compute the polytopes
+        segment_chunks = []
+        for it, segment in enumerate(segments):
+
+            # Test if the current segment is in the most recent polytope
+            if it > 0:
+                is_in_polytope = compute_segment_in_polytope(polytope[0], polytope[1], segment)
+            else:
+                #If we haven't created a polytope yet, so we set it to False.
+                is_in_polytope = False
+
+            # If this is the first line segment, we always create a polytope. Or subsequently, we only instantiate a polytope if the line segment
+            if (it == 0) or (it == len(segments) - 1) or (not is_in_polytope):
+
+                # Part 2: Computes the collision set
+                tnow = time.time()
+                
+                output = self.collision_set.compute_set_one_step(segment)
+
+                times_collision_set += time.time() - tnow
+
+                # Part 3: Computes the polytope
+                tnow = time.time()
+
+                polytope = self.get_polytope_from_outputs(output)
+
+                times_polytope += time.time() - tnow
+
+                polytopes.append(polytope)
+
+                if it > 0:
+                    segment_chunks.append(chunk)
+
+                # Start a new chunk
+                chunk = [it]
+
+            else:
+                chunk.append(it)
+        segment_chunks.append(chunk)
+
+        assert len(segment_chunks) == len(polytopes)
+        #print(segment_chunks)
+        #assert np.allclose(np.concatenate(segment_chunks).shape[0] , np.arange(len(segments)))
+
+        # Step 4: Perform Bezier spline optimization
+        tnow = time.time()
+
+        # Time scale of each part of the poly spline
+        segment_lengths = torch.linalg.norm(segments[:, 1] - segments[:, 0], dim=-1)
+        chunk_lengths = torch.tensor([torch.sum(segment_lengths[chunk]) for chunk in segment_chunks], device=self.device)
+        time_scale = chunk_lengths / self.vmax
+
+        # time_scale = torch.ones(len(polytopes), device=self.device)
+
+        # Solve
+        #_, feasible = self.spline_planner.optimize_bspline(polytopes, segments[0][0], segments[-1][-1], time_scale)
+        _, feasible = self.spline_planner.optimize_bspline(polytopes, x0, xf, time_scale)
+        if not feasible:
+            #traj = torch.stack([x0, xf], dim=0)
+            # self.save_polytope(polytopes, 'infeasible.obj')
+            #print(compute_segment_in_polytope(polytope[0], polytope[1], segments[-1]))
+            raise ValueError('Infeasible path!')
+            
+        traj = self.spline_planner.evaluate_bspline(torch.linspace(0., 1., 10, device=self.device))
+        traj = traj.permute((1, 0, 2, 3))
+
+        # Recompute the time scales of the bspline trajectory based on the solved b-spline. NOTE: The continuity of the poly spline at the intersections
+        # for higher order derivatives will be broken.
+        # distances = torch.sum(torch.linalg.norm(traj[:, :-1, 0, :] - traj[:, 1:, 0, :], dim=-1), dim=1)
+        # time_scale = distances / self.vmax
+        # self.spline_planner.bspline.set_time_scale(time_scale)
+
+        traj = traj.reshape(-1, self.spline_planner.num_deriv + 1, self.spline_planner.dim)
+
+        times_opt = time.time() - tnow
+  
+        # Save outgoing information
+        traj_data = {
+            'path': path.tolist(),
+            'polytopes': [torch.cat([polytope[0], polytope[1].unsqueeze(-1)], dim=-1).tolist() for polytope in polytopes],
+            'num_polytopes': len(polytopes),
+            'traj': traj.tolist(),
+            'times_astar': time_astar,
+            'times_collision_set': times_collision_set,
+            'times_polytope': times_polytope,
+            'times_opt': times_opt,
+            'feasible': feasible
+        }
+        
+        return traj_data
+    
+    # t is some wall clock time. This function does multiple things. If x0 is None, it will simply query the waypoint at time t along the poly spline.
+    # If x0 is not None, then t is used to check which spline / polytope the robot should be in, then projects x0 onto the polytope.
+    # Then, the optimizer will locally resolve for a spline in the current polytope from x0 to the last control point of the original spline for continuity.
+    def query_waypoint(self, t_query, t=None, x0=None):
+        if x0 is None:
+            output = self.spline_planner.evaluate_bspline_at_t(t_query)       # num_deriv x ndim
+        else:
+            # Solve all solves all bsplines from t to the end of the spline. If not, just locally solves the current bspline.
+            output, solver_success, meta = self.spline_planner.solve_local_waypoint(t_query, t, x0)    # num_deriv x ndim
+        return output
+    
+    def get_polytope_from_outputs(self, data):
+        # For every single line segment, we always create a polytope at the first line segment, 
+        # and then we subsequently check if future line segments are within the polytope before creating new ones.
+        gs_ids = data['primitive_ids']
+
+        A_bb = data['A_bb']
+        b_bb = data['b_bb_shrunk']
+        segment = data['path']
+        delta_x = segment[1] - segment[0]
+
+        midpoint = data['midpoint']
+
+        if len(gs_ids) == 0:
+            return (A_bb, b_bb)
+        
+        elif len(gs_ids) == 1:
+            rots = data['rots']
+            scales = data['scales']
+            means = data['means']
+
+        else:
+            rots = data['rots']
+            scales = data['scales']
+            means = data['means']
+
+        # Perform the intersection test
+        intersection_output = compute_intersection_linear_motion(segment[0], delta_x, rots, scales, means, 
+                                R_B=None, S_B=self.radius, collision_type='sphere', 
+                                mode='bisection', N=10)
+
+        # With the intersections computed, we can iterate through them and keep a minimal amount of halfspaces
+
+        A = []
+        b = []
+
+        # Loop until we have no more Gaussian intersections.
+        # The idea here is very similar to that done in SFC. For them, they use the Mahalanobis distance to scale their ellipsoid until it 
+        # reaches the first intersection point, create a halfplane there, segment out the points on the wrong side of the halfplane, and then repeat.
+
+        # Instead, we use K_opt as this scaling factor, calculate the halfplane, then inflate the halfplane by the radius of the robot. If the halfplane
+        # does not contain these ellipsoids, then we can safely ignore them. If it does, then we keep them in the queue.
+
+        deltas = intersection_output['deltas']
+        Q_opt = intersection_output['Q_opt']
+        K_opt = intersection_output['K_opt']
+        mu_A = intersection_output['mu_A']
+
+        if K_opt.numel() == 1:
+            A_cut, b_cut, _ = compute_polytope(deltas, Q_opt.unsqueeze(0), K_opt.unsqueeze(0), mu_A)
+            A.append(A_cut)
+            b.append(b_cut)
+
+        else:
+            while len(K_opt) > 0:
+            
+                # Find the minimum distance point
+                min_K, min_idx = torch.min(K_opt, dim=0)
+
+                # Compute the halfspace for the min distance ellipsoid
+                A_cut, b_cut, _ = compute_polytope(deltas[min_idx].unsqueeze(0), Q_opt[min_idx].unsqueeze(0), min_K.unsqueeze(0), mu_A[min_idx].unsqueeze(0))
+    
+                # Find all ellipsoids that are inside the halfspace. Remember that this halfspace is inflated!
+                A_cut_inflated = A_cut / torch.linalg.norm(A_cut, dim=-1, keepdim=True)
+                b_cut_inflated = b_cut / torch.linalg.norm(A_cut, dim=-1)
+                b_cut_inflated = b_cut_inflated + self.radius
+
+                keep_gaussians = ellipsoid_halfspace_intersection(means, rots, scales, A_cut_inflated.unsqueeze(0), b_cut_inflated)
+
+                # Keep track of the mask with segmented out ellipsoids and the min distance point!
+                keep_gaussians[min_idx] = False
+
+                # TODO: I think means is the same as mu_A, so we can remove one of them.
+                deltas = deltas[keep_gaussians]
+                Q_opt = Q_opt[keep_gaussians]
+                K_opt = K_opt[keep_gaussians]
+                mu_A = mu_A[keep_gaussians]
+                rots = rots[keep_gaussians]
+                scales = scales[keep_gaussians]
+                means = means[keep_gaussians]
+
+                # Append the halfspace to the list
+                A.append(A_cut)
+                b.append(b_cut)
+
+        A = torch.stack(A, dim=0).reshape(-1, deltas.shape[-1])
+        b = torch.stack(b, dim=0).reshape(-1, )
+
+        # The full polytope is a concatenation of the intersection polytope and the bounding box polytope
+        A = torch.cat([A, A_bb], dim=0)
+        b = torch.cat([b, b_bb], dim=0)
+
+        norm_A = torch.linalg.norm(A, dim=-1, keepdims=True)
+        A = A / norm_A
+        b = b / norm_A.squeeze()
+
+        return (A, b)
+
+    def save_polytope(self, polytopes, save_path):
+        # Initialize mesh object
+        mesh = o3d.geometry.TriangleMesh()
+
+        for (A, b) in polytopes:
+            # Transfer all tensors to numpy
+            A = A.cpu().numpy()
+            b = b.cpu().numpy()
+
+            pt = find_interior(A, b)
+
+            halfspaces = np.concatenate([A, -b[..., None]], axis=-1)
+            hs = scipy.spatial.HalfspaceIntersection(halfspaces, pt, incremental=False, qhull_options=None)
+            qhull_pts = hs.intersections
+
+            pcd_object = o3d.geometry.PointCloud()
+            pcd_object.points = o3d.utility.Vector3dVector(qhull_pts)
+            bb_mesh, qhull_indices = pcd_object.compute_convex_hull()
+            mesh += bb_mesh
+        
+        success = o3d.io.write_triangle_mesh(save_path, mesh, print_progress=True)
+
+        return success
