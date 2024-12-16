@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="SAFER-Splat: Safety with Control Barrier 
+        Functions in Online Gaussian Splatting Maps">
+  <meta name="keywords" content="Gaussian Splatting, Safety, Collision Avoidance, State Estimation">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="google-site-verification" content="Mv03K1PSHa6DfPDktDXDooEr11AZ1jIliliLan_6mQg" />
+  <title>SAFER-Splat: Safety with Control Barrier Functions in Online Gaussian Splatting Maps</title>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+  <link rel="icon" href="./static/images/favicon.svg">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+</head>
+<body>
+
+<nav class="navbar" role="navigation" aria-label="main navigation">
+  <div class="navbar-brand">
+    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
+  </div>
+  <div class="navbar-menu">
+    <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
+      <div class="navbar-item has-dropdown is-hoverable">
+        <a class="navbar-link">
+          More Research
+        </a>
+        <div class="navbar-dropdown">
+          <a class="navbar-item" href="https://mikh3x4.github.io/nerf-navigation/">
+            NeRF-Nav
+          </a>
+          <a class="navbar-item" href="https://chengine.github.io/catnips/">
+            CATNIPS
+          </a>
+          <a class="navbar-item" href="https://chengine.github.io/splatnav/">
+            Splat-Nav
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</nav>
+
+
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title"><img src="./static/images/splat_icon.svg" width="40">
+            SAFER-Splat: Safety with Control Barrier Functions in Online Gaussian Splatting Maps </h1>
+          <div class="is-size-5 publication-authors">
+            <span class="author-block">
+              <a href="https://msl.stanford.edu/people/timchen">Timothy Chen</a><sup>1*</sup>,</span>
+            <span class="author-block">
+              <a href="https://aidenswann.com/">Aiden Swann</a><sup>1*</sup>,</span>
+            <span class="author-block">
+                <a href="https://msl.stanford.edu/people/javieryu">Javier Yu</a><sup>1*</sup>,</span>
+            <span class="author-block">
+              <a href="https://msl.stanford.edu/people/olashorinwa">Ola Shorinwa</a><sup>1</sup>,</span>
+            <span class="author-block">
+              <a href="https://rmurai.co.uk/">Riku Murai</a><sup>2</sup>,</span>
+            <span class="author-block">
+              <a href="https://arm.stanford.edu/people/monroe-kennedy">Monroe Kennedy III</a><sup>1</sup>,</span>
+            <span class="author-block">
+              <a href="https://web.stanford.edu/~schwager/">Mac Schwager</a><sup>1</sup>
+            </span>
+          </div>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>*</sup>The co-first authors contributed equally.</span>
+            <br/>
+            <span class="author-block"><sup>1</sup>Stanford University,</span>
+            <span class="author-block"><sup>2</sup>Imperial College London</span>
+          </div>
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <!-- PDF Link. -->
+              <!-- <span class="link-block">
+                <a href="https://ieeexplore.ieee.org/document/10494911"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                  </span>
+                  <span>Paper</span>
+                </a>
+              </span> -->
+              <span class="link-block">
+                <a href="https://www.arxiv.org/abs/2409.09868"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href="https://github.com/chengine/safer-splat"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code</span>
+                  </a>
+              </span>
+              <!-- Dataset Link. -->
+              <span class="link-block">
+                <a href="https://drive.google.com/drive/u/1/folders/1xSu7bFW8OBRd9YHfz3LzdBx7pDjUHEPh"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="far fa-images"></i>
+                  </span>
+                  <span>Data</span>
+                  </a>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <video id="teaser" autoplay muted loop playsinline height="100%">
+        <source src="./static/videos/teaser.mp4" type="video/mp4">
+      </video>
+      <p class="has-text-justified"></p>
+      <span class="safer-splat">SAFER-Splat</span> 
+      is a real-time action filter, based on control barrier functions, 
+      for safe robotic navigation in online mapping with Gaussian Splatting. 
+      We open-source SplatBridge, our modular framework for constructing Gaussian
+      Splatting maps online.
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Abstract. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            SAFER-Splat (<u>S</u>imultaneous <u>A</u>ction <u>F</u>iltering and <u>E</u>nvironment <u>R</u>econstruction)
+            is a real-time, scalable, and minimally invasive action filter, based on control barrier functions, 
+            for safe robotic navigation in a detailed map constructed at runtime using Gaussian Splatting. 
+            We propose a novel Control Barrier Function (CBF) that not only induces safety with respect to all
+            Gaussian primitives in the scene, but when synthesized into a controller, is capable of processing 
+            hundred of thousands of Gaussians while maintaining a minimal memory footprint and operating at 15 Hz during 
+            online Splat training. 
+            To showcase the safety filter, we also introduce SplatBridge, an open-source ROS bridge for real-time 
+            GSplat training for robots.  We demonstrate the safety and robustness of our pipeline first in simulation,
+            where our method is 20-50x faster, safer, and less conservative than competing methods based on neural 
+            radiance fields. We then demonstrate simultaneous GSplat mapping and safety filtering on a drone hardware 
+            platform using only on-board perception. We verify that under teleoperation a human pilot cannot invoke 
+            a collision.
+          </p>
+        </div>
+      </div>
+    </div>
+    <!--/ Abstract. -->
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- SAFER-Splat. -->
+    <div class="columns is-centered">
+      <div class="content column is-full-width">
+        <h2 class="title is-3"><span class="safer_splat">SAFER-Splat</span></h2>
+
+        <div class="content is-full-width has-text-centered">
+          <img id="architecture-image" src="./static/images/architecture.png"
+               alt="SAFER-Splat architecture."/>
+          <p class="has-text-justified">
+            <span class="safer-splat">SAFER-Splat</span>
+            leverages a novel
+            CBF, closely integrated with the GSplat representation, to
+            derive a lightweight, minimally-invasive safe action filter. To
+            synthesize a controller, we embed the CBF safety constraint
+            into a quadratic program, minimizing the deviation between
+            the desired and actuated control effort. By pruning the CBF
+            constraints to identify a minimal number of constraints, our
+            method scales efficiently to run in real-time with hundred of
+            thousands ellipsoidal primitives in the scene. Together, the
+            safety guarantees, computational efficiency, and scalability of
+            SAFER-Splat enable its superior performance in collision-free
+            robot control in online GSplat scenes. 
+          </p>
+        </div>
+
+    <!-- <br/> -->
+    <!-- SplatBridge. -->
+    <div class="columns is-centered">
+      <div class="content column is-full-width">
+        <h2 class="title is-3"><span class="splatbridge">SplatBridge</span></h2>
+
+        <div class="content is-full-width has-text-centered">
+          <p class="has-text-justified">
+            To demonstrate the performance of SAFER-Splat,
+            we introduce
+            <span class="splatbridge">SplatBridge</span>.
+            SplatBridge utilizes an incoming stream of RGB images, 
+            time-of-flight (ToF) point clouds, and estimated poses from a robot's
+            onboard cameras to
+            train a GSplat in real-time. SplatBridge builds upon
+            <a href="https://arxiv.org/abs/2305.09761">NerfBridge</a>, to interface with the
+            GSplat implementation in <a href="https://docs.nerf.studio/">Nerfstudio</a>. 
+            At every keyframe,
+            SplatBridge loads the image into a running buffer and seeds
+            Gaussian primitives from the ToF point-cloud, 
+            while asynchronously optimizing the Gaussian
+            attributes and keyframe camera poses. Here, we show the remarkable photorealistic rendering
+            capability of SplatBridge in a real-world scene.
+          </p>
+          <img src="./static/images/gt_and_renders.png"
+               alt="SplatBridge Rendering."/>
+        </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h2 class="title is-3">Hardware Experiments</h2>
+        <p>
+          In simulation and hardware experiments, 
+          we demonstrate the safety and computational efficiency of SAFER-Splat.
+          Here, we present a few hardware experiment results, where
+          a human pilot repeatedly attempts to force a collision of the drone
+          with obstacles in the scene.
+          We refer readers to our <a href="https://www.arxiv.org/abs/2409.09868">paper</a>
+          for a complete discussion of the experiment results.
+        </p>
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <p>
+            Although the human pilot tries to force a collision,
+            the CBF preserves the drone's safety by filtering the control inputs
+            sent to the drone.
+          </p>
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/trial2_clip.mp4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/trial3_clipped.mp4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <!-- <br/> -->
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/trial4_trim.mp4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/trial4_trimmed.mp4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Paper video. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Video</h2>
+        <div class="publication-video">
+          <iframe src="./static/videos/safer_splat.mp4"
+                  frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        </div>
+      </div>
+    </div>
+    <!--/ Paper video. -->
+  </div>
+</section>
+
+<section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+    <pre><code>
+      @misc{chen2024safer-splat,
+        title={SAFER-Splat: Safety with Control Barrier Functions in Online Gaussian Splatting Maps}, 
+        author={Timothy Chen and Aiden Swann and Javier Yu and Ola Shorinwa and Riku Murai and Monroe Kennedy III and Mac Schwager},
+        journal={arXiv preprint arXiv:2409.09868},
+        year={2024}
+        }
+    </code></pre>
+  </div>
+</section>
+
+
+<footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+          <p>
+            This website is licensed under a <a rel="license"
+                                                href="http://creativecommons.org/licenses/by-sa/4.0/">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>. This webpage template is from <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a>
+            . We sincerely thank <a href="https://keunhong.com/">Keunhong Park</a> for developing and open-sourcing this template.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
