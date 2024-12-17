@@ -9,6 +9,7 @@ trajs
 *.jpg
 *.jpeg
 *.ply
+videos
 __pycache__/
 *.pyc
 !*/logo.png

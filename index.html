@@ -64,7 +64,9 @@
     <div class="container is-max-desktop">
       <div class="columns is-centered">
         <div class="column has-text-centered">
-          <h1 class="title is-1 publication-title"> Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps </h1>
+          <img src="./static/images/splatnav_logo.svg"
+          alt="Splat-Nav Logo" />
+          <h1 class="title is-1 publication-title"> Safe Real-Time Robot Navigation in Gaussian Splatting Maps </h1>
           <div class="is-size-5 publication-authors">
             <span class="author-block">
               <a href="https://msl.stanford.edu/people/timchen">Timothy Chen</a><sup>1*</sup>,</span>
@@ -222,7 +224,7 @@
         <h3 class="title is-4">Open-Loop</h3>
         <div class="content has-text-justified">
           <p>
-          Open-Loop schemes do not re-plan using Splat-Loc for pose estimates.
+          Open-loop schemes do not re-plan, relying on the onboard VIO to track the trajectory.
           </p>
           <div class="columns is-centered">
 
@@ -290,7 +292,7 @@
         <h3 class="title is-4"></h3>
         <div class="content has-text-justified">
           <p>
-            Closed-Loop uses VIO to estimate poses and re-plans accordingly. 
+            Closed-loop uses VIO to estimate poses and re-plan accordingly. 
           </p>
           <div class="columns is-centered">
 
@@ -427,7 +429,8 @@
         <h3 class="title is-4"></h3>
         <div class="content has-text-justified">
           <p>
-            Finally, we demonstrate the robustness of Splat-Plan using closed-loop planning with the quadrotor flying at 1.5 m/s.
+            We also demonstrate the robustness of Splat-Plan by tracking open-loop trajectories at 1.5 <m>
+            <s></s>.
           </p>
           <div class="columns is-centered">
 
@@ -487,6 +490,45 @@
     </div>
   </div>
 
+  <!-- Endurance -->
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h3 class="title is-4">Endurance Flights</h3>
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <p>
+            Finally, closed-loop re-planning using Splat-Plan and Splat-Loc can safely navigate cluttered environments over long periods of time. <m>
+            <s></s>.
+          </p>
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/endurance1_compressed.mp4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/endurance2_compressed.mp4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   
 
   
@@ -498,7 +540,7 @@
   <div class="container is-max-desktop content">
     <h2 class="title">BibTeX</h2>
     <pre><code>
-      @misc{chen2024splatnavsaferealtimerobot,
+      @misc{chen2024splatnav,
         title={Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps}, 
         author={Timothy Chen and Ola Shorinwa and Joseph Bruno and Aiden Swann and Javier Yu and Weijia Zeng and Keiko Nagami and Philip Dames and Mac Schwager},
         year={2024},
