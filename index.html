@@ -3,12 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="description"
-        content="SAFER-Splat: Safety with Control Barrier 
-        Functions in Online Gaussian Splatting Maps">
+        content="Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps">
   <meta name="keywords" content="Gaussian Splatting, Safety, Collision Avoidance, State Estimation">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="google-site-verification" content="Mv03K1PSHa6DfPDktDXDooEr11AZ1jIliliLan_6mQg" />
-  <title>SAFER-Splat: Safety with Control Barrier Functions in Online Gaussian Splatting Maps</title>
+  <title>Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps</title>
 
   <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
         rel="stylesheet">
@@ -45,14 +44,14 @@
           More Research
         </a>
         <div class="navbar-dropdown">
+          <a class="navbar-item" href="https://chengine.github.io/safer-splat/">
+            SAFER-Splat
+          </a>          
           <a class="navbar-item" href="https://mikh3x4.github.io/nerf-navigation/">
             NeRF-Nav
           </a>
           <a class="navbar-item" href="https://chengine.github.io/catnips/">
             CATNIPS
-          </a>
-          <a class="navbar-item" href="https://chengine.github.io/splatnav/">
-            Splat-Nav
           </a>
         </div>
       </div>
@@ -67,21 +66,24 @@
     <div class="container is-max-desktop">
       <div class="columns is-centered">
         <div class="column has-text-centered">
-          <h1 class="title is-1 publication-title"><img src="./static/images/splat_icon.svg" width="40">
-            SAFER-Splat: Safety with Control Barrier Functions in Online Gaussian Splatting Maps </h1>
+          <h1 class="title is-1 publication-title"> Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps </h1>
           <div class="is-size-5 publication-authors">
             <span class="author-block">
               <a href="https://msl.stanford.edu/people/timchen">Timothy Chen</a><sup>1*</sup>,</span>
+             <span class="author-block">
+              <a href="https://msl.stanford.edu/people/olashorinwa">Ola Shorinwa</a><sup>1*</sup>,</span>
             <span class="author-block">
-              <a href="https://aidenswann.com/">Aiden Swann</a><sup>1*</sup>,</span>
+              <a href="https://www.joseph-bruno.com/">Joseph Bruno</a><sup>3</sup>,</span>                            
             <span class="author-block">
-                <a href="https://msl.stanford.edu/people/javieryu">Javier Yu</a><sup>1*</sup>,</span>
+              <a href="https://aidenswann.com/">Aiden Swann</a><sup>1</sup>,</span>
             <span class="author-block">
-              <a href="https://msl.stanford.edu/people/olashorinwa">Ola Shorinwa</a><sup>1</sup>,</span>
+              <a href="https://msl.stanford.edu/people/javieryu">Javier Yu</a><sup>1</sup>,</span>
             <span class="author-block">
-              <a href="https://rmurai.co.uk/">Riku Murai</a><sup>2</sup>,</span>
+            <a href="https://www.linkedin.com/in/weijia-zeng-b45943183/">Weijia Zeng</a><sup>2</sup>,</span>             
             <span class="author-block">
-              <a href="https://arm.stanford.edu/people/monroe-kennedy">Monroe Kennedy III</a><sup>1</sup>,</span>
+              <a href="https://msl.stanford.edu/people/keikonagami">Keiko Nagami</a><sup>1</sup>,</span>
+            <span class="author-block">
+              <a href="https://www.temple.edu/about/faculty-staff/philip-dames-tug85627">Philip Dames</a><sup>3</sup>
             <span class="author-block">
               <a href="https://web.stanford.edu/~schwager/">Mac Schwager</a><sup>1</sup>
             </span>
@@ -91,7 +93,8 @@
             <span class="author-block"><sup>*</sup>The co-first authors contributed equally.</span>
             <br/>
             <span class="author-block"><sup>1</sup>Stanford University,</span>
-            <span class="author-block"><sup>2</sup>Imperial College London</span>
+            <span class="author-block"><sup>2</sup>University of California San Diego,</span>
+            <span class="author-block"><sup>3</sup>Temple University</span>
           </div>
 
           <div class="column has-text-centered">
@@ -107,7 +110,7 @@
                 </a>
               </span> -->
               <span class="link-block">
-                <a href="https://www.arxiv.org/abs/2409.09868"
+                <a href="https://arxiv.org/abs/2403.02751"
                    class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
                       <i class="ai ai-arxiv"></i>
@@ -117,7 +120,7 @@
               </span>
               <!-- Code Link. -->
               <span class="link-block">
-                <a href="https://github.com/chengine/safer-splat"
+                <a href="https://github.com/chengine/splatnav"
                    class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
                       <i class="fab fa-github"></i>
@@ -127,7 +130,7 @@
               </span>
               <!-- Dataset Link. -->
               <span class="link-block">
-                <a href="https://drive.google.com/drive/u/1/folders/1xSu7bFW8OBRd9YHfz3LzdBx7pDjUHEPh"
+                <a href="https://drive.google.com/drive/u/1/folders/1K0zfpuAti43YIBK5APFd-Yv73CvljgMC"
                    class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
                       <i class="far fa-images"></i>
@@ -150,11 +153,8 @@
         <source src="./static/videos/teaser.mp4" type="video/mp4">
       </video>
       <p class="has-text-justified"></p>
-      <span class="safer-splat">SAFER-Splat</span> 
-      is a real-time action filter, based on control barrier functions, 
-      for safe robotic navigation in online mapping with Gaussian Splatting. 
-      We open-source SplatBridge, our modular framework for constructing Gaussian
-      Splatting maps online.
+      <span class="splat-nav">Splat-Nav</span> 
+      enables non-conservative, real-time flight using 3D Gaussian Splatting to represent a map.   
     </div>
   </div>
 </section>
@@ -167,19 +167,10 @@
         <h2 class="title is-3">Abstract</h2>
         <div class="content has-text-justified">
           <p>
-            SAFER-Splat (<u>S</u>imultaneous <u>A</u>ction <u>F</u>iltering and <u>E</u>nvironment <u>R</u>econstruction)
-            is a real-time, scalable, and minimally invasive action filter, based on control barrier functions, 
-            for safe robotic navigation in a detailed map constructed at runtime using Gaussian Splatting. 
-            We propose a novel Control Barrier Function (CBF) that not only induces safety with respect to all
-            Gaussian primitives in the scene, but when synthesized into a controller, is capable of processing 
-            hundred of thousands of Gaussians while maintaining a minimal memory footprint and operating at 15 Hz during 
-            online Splat training. 
-            To showcase the safety filter, we also introduce SplatBridge, an open-source ROS bridge for real-time 
-            GSplat training for robots.  We demonstrate the safety and robustness of our pipeline first in simulation,
-            where our method is 20-50x faster, safer, and less conservative than competing methods based on neural 
-            radiance fields. We then demonstrate simultaneous GSplat mapping and safety filtering on a drone hardware 
-            platform using only on-board perception. We verify that under teleoperation a human pilot cannot invoke 
-            a collision.
+            We present Splat-Nav, a real-time robot navigation pipeline designed to work with environment representations generated by Gaussian Splatting (GSplat), a powerful new 3D scene representation. 
+            Splat-Nav consists of two components: 1) Splat-Plan, a safe planning module, and 2) Splat-Loc, a robust vision-based pose estimation module.
+            Splat-Plan builds a safe-by-construction polytope corridor through the map based on mathematically rigorous collision constraints and then constructs a B\'ezier curve trajectory through this corridor.
+            Splat-Loc provides real-time recursive state estimates given only an RGB feed from an on-board camera, leveraging the point-cloud representation inherent in GSplat scenes. Splat-Nav endows robots the ability to recursively re-plan smooth and safe trajectories to goal locations.  Goal locations can be specified with position coordinates, or with language commands by using a language embedded GSplat. We demonstrate the safety and robustness of our pipeline in both simulation and hardware experiments, where we show online re-planning at more than \unit[2]{Hz} and pose estimation at about \unit[25]{Hz}, an order of magnitude faster than Neural Radiance Field (NeRF)-based navigation methods, thereby enabling real-time navigation.
           </p>
         </div>
       </div>
@@ -190,90 +181,48 @@
 
 <section class="section">
   <div class="container is-max-desktop">
-    <!-- SAFER-Splat. -->
+    <!-- Splat-Nav. -->
     <div class="columns is-centered">
       <div class="content column is-full-width">
-        <h2 class="title is-3"><span class="safer_splat">SAFER-Splat</span></h2>
+        <h2 class="title is-3"><span class="splat_nav">Splat-Nav</span></h2>
 
         <div class="content is-full-width has-text-centered">
-          <img id="architecture-image" src="./static/images/architecture.png"
-               alt="SAFER-Splat architecture."/>
+          <img id="architecture-image" src="./static/images/SplatNavPipeline.png"
+               alt="Splat-Nav architecture."/>
           <p class="has-text-justified">
-            <span class="safer-splat">SAFER-Splat</span>
-            leverages a novel
-            CBF, closely integrated with the GSplat representation, to
-            derive a lightweight, minimally-invasive safe action filter. To
-            synthesize a controller, we embed the CBF safety constraint
-            into a quadratic program, minimizing the deviation between
-            the desired and actuated control effort. By pruning the CBF
-            constraints to identify a minimal number of constraints, our
-            method scales efficiently to run in real-time with hundred of
-            thousands ellipsoidal primitives in the scene. Together, the
-            safety guarantees, computational efficiency, and scalability of
-            SAFER-Splat enable its superior performance in collision-free
-            robot control in online GSplat scenes. 
+            <span class="splat-nav">Splat-Nav</span>
+            leverages GSplat models to plan safe trajectories in real-time. Splat-Nav consists of two components: 1)Splat-Plan, a safe planning module and 2)Splat-Loc, a robust vision-based pose estimation module.
+            Leveraging rapid collision-checking properties made possible with GSplats, we demonstrate autonomous real-time flight over in cluttered environments.   
           </p>
         </div>
-
-    <!-- <br/> -->
-    <!-- SplatBridge. -->
-    <div class="columns is-centered">
-      <div class="content column is-full-width">
-        <h2 class="title is-3"><span class="splatbridge">SplatBridge</span></h2>
-
-        <div class="content is-full-width has-text-centered">
-          <p class="has-text-justified">
-            To demonstrate the performance of SAFER-Splat,
-            we introduce
-            <span class="splatbridge">SplatBridge</span>.
-            SplatBridge utilizes an incoming stream of RGB images, 
-            time-of-flight (ToF) point clouds, and estimated poses from a robot's
-            onboard cameras to
-            train a GSplat in real-time. SplatBridge builds upon
-            <a href="https://arxiv.org/abs/2305.09761">NerfBridge</a>, to interface with the
-            GSplat implementation in <a href="https://docs.nerf.studio/">Nerfstudio</a>. 
-            At every keyframe,
-            SplatBridge loads the image into a running buffer and seeds
-            Gaussian primitives from the ToF point-cloud, 
-            while asynchronously optimizing the Gaussian
-            attributes and keyframe camera poses. Here, we show the remarkable photorealistic rendering
-            capability of SplatBridge in a real-world scene.
-          </p>
-          <img src="./static/images/gt_and_renders.png"
-               alt="SplatBridge Rendering."/>
-        </div>
-    </div>
-  </div>
+  </div>  
 </section>
 
+<!-- Hardware -->
 <section class="section">
+   <!-- Open Loop -->
   <div class="container is-max-desktop">
     <div class="columns is-centered">
       <div class="column is-full-width">
         <h2 class="title is-3">Hardware Experiments</h2>
         <p>
-          In simulation and hardware experiments, 
-          we demonstrate the safety and computational efficiency of SAFER-Splat.
-          Here, we present a few hardware experiment results, where
-          a human pilot repeatedly attempts to force a collision of the drone
-          with obstacles in the scene.
-          We refer readers to our <a href="https://www.arxiv.org/abs/2409.09868">paper</a>
+          Four objects within the scene (beachball, keyboard, microwave, phonebook) are semnatically segmented 
+          and chosen as goal locations for our trials. We run using three control schemes (Open-Loop, Closed-Loop VIO, and Splat-Loc) each demonstrated in the videos below. 
+          We refer readers to our <a href="https://arxiv.org/abs/2403.02751">paper</a>
           for a complete discussion of the experiment results.
         </p>
 
-        <h3 class="title is-4"></h3>
+        <h3 class="title is-4">Open-Loop</h3>
         <div class="content has-text-justified">
           <p>
-            Although the human pilot tries to force a collision,
-            the CBF preserves the drone's safety by filtering the control inputs
-            sent to the drone.
+          Open-Loop schemes do not re-plan using Splat-Loc for pose estimates.
           </p>
           <div class="columns is-centered">
 
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/trial2_clip.mp4"
+                  <source src="./static/videos/beachball_openloop_trimmed.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -283,7 +232,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/trial3_clipped.mp4"
+                    <source src="./static/videos/keyboard_openloop_trimmed.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -301,7 +250,7 @@
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/trial4_trim.mp4"
+                  <source src="./static/videos/microwave_openloop_trimmed.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -311,7 +260,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/trial4_trimmed.mp4"
+                    <source src="./static/videos/phonebook_openloop_trimmed.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -324,7 +273,217 @@
       </div>
     </div>
   </div>
+
+  <!-- Closed Loop VIO-->
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h3 class="title is-4">Splat-Loc</h3>
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <p>
+            Closed-Loop uses VIO to estimate poses and re-plans accordingly. 
+          </p>
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/beachball_closedloop_trimmed.MP4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/keyboard_closedloop_trimmed.MP4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <!-- <br/> -->
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/microwave_closedloop_trimmed.MP4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/phonebook_closedloop_trimmed.MP4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Splat Loc -->
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h3 class="title is-4">Splat-Loc</h3>
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <p>
+            Splat-Loc estimates the current drone pose and re-plans a path to the goal location. This method is robust against disturbance and drift. 
+          </p>
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/beachball_splatloc_trimmed.MP4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/keyboard_splatloc_trimmed.MP4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <!-- <br/> -->
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/microwave_splatloc_trimmed.MP4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/phonebook_splatloc_trimmed.MP4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Fast -->
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-full-width">
+        <h3 class="title is-4">Fast</h3>
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <p>
+            We finally demonstrate the robustness of Splat-Plan using closed-loop planning with the quadrotor flying at 1.5 m/s.
+          </p>
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/beachball_fast_trimmed.MP4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/keyboard_fast_trimmed.MP4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <!-- <br/> -->
+
+        <h3 class="title is-4"></h3>
+        <div class="content has-text-justified">
+          <div class="columns is-centered">
+
+            <div class="column">
+              <div class="content">        
+                <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                  <source src="./static/videos/microwave_fast_trimmed.MP4"
+                          type="video/mp4">
+                </video>
+              </div>
+            </div>
+        
+            <div class="column">
+              <div class="columns is-centered">
+                <div class="column content">
+                  <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
+                    <source src="./static/videos/phonebook_fast_trimmed.MP4"
+                            type="video/mp4">
+                  </video>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  
 </section>
+
+
+
 
 <section class="section">
   <div class="container is-max-desktop">
@@ -338,7 +497,6 @@
         </div>
       </div>
     </div>
-    <!--/ Paper video. -->
   </div>
 </section>
 
@@ -346,12 +504,15 @@
   <div class="container is-max-desktop content">
     <h2 class="title">BibTeX</h2>
     <pre><code>
-      @misc{chen2024safer-splat,
-        title={SAFER-Splat: Safety with Control Barrier Functions in Online Gaussian Splatting Maps}, 
-        author={Timothy Chen and Aiden Swann and Javier Yu and Ola Shorinwa and Riku Murai and Monroe Kennedy III and Mac Schwager},
-        journal={arXiv preprint arXiv:2409.09868},
-        year={2024}
-        }
+      @misc{chen2024splatnavsaferealtimerobot,
+        title={Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps}, 
+        author={Timothy Chen and Ola Shorinwa and Joseph Bruno and Aiden Swann and Javier Yu and Weijia Zeng and Keiko Nagami and Philip Dames and Mac Schwager},
+        year={2024},
+        eprint={2403.02751},
+        archivePrefix={arXiv},
+        primaryClass={cs.RO},
+        url={https://arxiv.org/abs/2403.02751}, 
+      }
     </code></pre>
   </div>
 </section>
