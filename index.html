@@ -4,9 +4,11 @@
   <meta charset="utf-8">
   <meta name="description"
         content="Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps">
+        content="Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps">
   <meta name="keywords" content="Gaussian Splatting, Safety, Collision Avoidance, State Estimation">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="google-site-verification" content="Mv03K1PSHa6DfPDktDXDooEr11AZ1jIliliLan_6mQg" />
+  <title>Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps</title>
   <title>Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps</title>
 
   <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
@@ -47,6 +49,9 @@
           <a class="navbar-item" href="https://chengine.github.io/safer-splat/">
             SAFER-Splat
           </a>          
+          <a class="navbar-item" href="https://chengine.github.io/safer-splat/">
+            SAFER-Splat
+          </a>          
           <a class="navbar-item" href="https://mikh3x4.github.io/nerf-navigation/">
             NeRF-Nav
           </a>
@@ -67,6 +72,7 @@
       <div class="columns is-centered">
         <div class="column has-text-centered">
           <h1 class="title is-1 publication-title"> Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps </h1>
+          <h1 class="title is-1 publication-title"> Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps </h1>
           <div class="is-size-5 publication-authors">
             <span class="author-block">
               <a href="https://msl.stanford.edu/people/timchen">Timothy Chen</a><sup>1*</sup>,</span>
@@ -74,15 +80,24 @@
               <a href="https://msl.stanford.edu/people/olashorinwa">Ola Shorinwa</a><sup>1*</sup>,</span>
             <span class="author-block">
               <a href="https://www.joseph-bruno.com/">Joseph Bruno</a><sup>3</sup>,</span>                            
+             <span class="author-block">
+              <a href="https://msl.stanford.edu/people/olashorinwa">Ola Shorinwa</a><sup>1*</sup>,</span>
             <span class="author-block">
+              <a href="https://www.joseph-bruno.com/">Joseph Bruno</a><sup>3</sup>,</span>                            
+            <span class="author-block">
+              <a href="https://aidenswann.com/">Aiden Swann</a><sup>1</sup>,</span>
               <a href="https://aidenswann.com/">Aiden Swann</a><sup>1</sup>,</span>
             <span class="author-block">
               <a href="https://msl.stanford.edu/people/javieryu">Javier Yu</a><sup>1</sup>,</span>
+              <a href="https://msl.stanford.edu/people/javieryu">Javier Yu</a><sup>1</sup>,</span>
             <span class="author-block">
+            <a href="https://www.linkedin.com/in/weijia-zeng-b45943183/">Weijia Zeng</a><sup>2</sup>,</span>             
             <a href="https://www.linkedin.com/in/weijia-zeng-b45943183/">Weijia Zeng</a><sup>2</sup>,</span>             
             <span class="author-block">
               <a href="https://msl.stanford.edu/people/keikonagami">Keiko Nagami</a><sup>1</sup>,</span>
+              <a href="https://msl.stanford.edu/people/keikonagami">Keiko Nagami</a><sup>1</sup>,</span>
             <span class="author-block">
+              <a href="https://www.temple.edu/about/faculty-staff/philip-dames-tug85627">Philip Dames</a><sup>3</sup>
               <a href="https://www.temple.edu/about/faculty-staff/philip-dames-tug85627">Philip Dames</a><sup>3</sup>
             <span class="author-block">
               <a href="https://web.stanford.edu/~schwager/">Mac Schwager</a><sup>1</sup>
@@ -93,6 +108,8 @@
             <span class="author-block"><sup>*</sup>The co-first authors contributed equally.</span>
             <br/>
             <span class="author-block"><sup>1</sup>Stanford University,</span>
+            <span class="author-block"><sup>2</sup>University of California San Diego,</span>
+            <span class="author-block"><sup>3</sup>Temple University</span>
             <span class="author-block"><sup>2</sup>University of California San Diego,</span>
             <span class="author-block"><sup>3</sup>Temple University</span>
           </div>
@@ -111,6 +128,7 @@
               </span> -->
               <span class="link-block">
                 <a href="https://arxiv.org/abs/2403.02751"
+                <a href="https://arxiv.org/abs/2403.02751"
                    class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
                       <i class="ai ai-arxiv"></i>
@@ -121,6 +139,7 @@
               <!-- Code Link. -->
               <span class="link-block">
                 <a href="https://github.com/chengine/splatnav"
+                <a href="https://github.com/chengine/splatnav"
                    class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
                       <i class="fab fa-github"></i>
@@ -130,6 +149,7 @@
               </span>
               <!-- Dataset Link. -->
               <span class="link-block">
+                <a href="https://drive.google.com/drive/u/1/folders/1K0zfpuAti43YIBK5APFd-Yv73CvljgMC"
                 <a href="https://drive.google.com/drive/u/1/folders/1K0zfpuAti43YIBK5APFd-Yv73CvljgMC"
                    class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
@@ -146,6 +166,7 @@
   </div>
 </section>
 <!-- REPLACE WITH FINAL VIDEO
+<!-- REPLACE WITH FINAL VIDEO
 <section class="hero teaser">
   <div class="container is-max-desktop">
     <div class="hero-body">
@@ -155,9 +176,12 @@
       <p class="has-text-justified"></p>
       <span class="splat-nav">Splat-Nav</span> 
       enables non-conservative, real-time flight using 3D Gaussian Splatting to represent a map.   
+      <span class="splat-nav">Splat-Nav</span> 
+      enables non-conservative, real-time flight using 3D Gaussian Splatting to represent a map.   
     </div>
   </div>
 </section>
+-->
 -->
 <section class="section">
   <div class="container is-max-desktop">
@@ -167,6 +191,10 @@
         <h2 class="title is-3">Abstract</h2>
         <div class="content has-text-justified">
           <p>
+            We present Splat-Nav, a real-time robot navigation pipeline designed to work with environment representations generated by Gaussian Splatting (GSplat), a powerful new 3D scene representation. 
+            Splat-Nav consists of two components: 1) Splat-Plan, a safe planning module, and 2) Splat-Loc, a robust vision-based pose estimation module.
+            Splat-Plan builds a safe-by-construction polytope corridor through the map based on mathematically rigorous collision constraints and then constructs a B\'ezier curve trajectory through this corridor.
+            Splat-Loc provides real-time recursive state estimates given only an RGB feed from an on-board camera, leveraging the point-cloud representation inherent in GSplat scenes. Splat-Nav endows robots the ability to recursively re-plan smooth and safe trajectories to goal locations.  Goal locations can be specified with position coordinates, or with language commands by using a language embedded GSplat. We demonstrate the safety and robustness of our pipeline in both simulation and hardware experiments, where we show online re-planning at more than \unit[2]{Hz} and pose estimation at about \unit[25]{Hz}, an order of magnitude faster than Neural Radiance Field (NeRF)-based navigation methods, thereby enabling real-time navigation.
             We present Splat-Nav, a real-time robot navigation pipeline designed to work with environment representations generated by Gaussian Splatting (GSplat), a powerful new 3D scene representation. 
             Splat-Nav consists of two components: 1) Splat-Plan, a safe planning module, and 2) Splat-Loc, a robust vision-based pose estimation module.
             Splat-Plan builds a safe-by-construction polytope corridor through the map based on mathematically rigorous collision constraints and then constructs a B\'ezier curve trajectory through this corridor.
@@ -182,11 +210,15 @@
 <section class="section">
   <div class="container is-max-desktop">
     <!-- Splat-Nav. -->
+    <!-- Splat-Nav. -->
     <div class="columns is-centered">
       <div class="content column is-full-width">
         <h2 class="title is-3"><span class="splat_nav">Splat-Nav</span></h2>
+        <h2 class="title is-3"><span class="splat_nav">Splat-Nav</span></h2>
 
         <div class="content is-full-width has-text-centered">
+          <img id="architecture-image" src="./static/images/SplatNavPipeline.png"
+               alt="Splat-Nav architecture."/>
           <img id="architecture-image" src="./static/images/SplatNavPipeline.png"
                alt="Splat-Nav architecture."/>
           <p class="has-text-justified">
@@ -196,16 +228,27 @@
           </p>
         </div>
   </div>  
+            <span class="splat-nav">Splat-Nav</span>
+            leverages GSplat models to plan safe trajectories in real-time. Splat-Nav consists of two components: 1)Splat-Plan, a safe planning module and 2)Splat-Loc, a robust vision-based pose estimation module.
+            Leveraging rapid collision-checking properties made possible with GSplats, we demonstrate autonomous real-time flight over in cluttered environments.   
+          </p>
+        </div>
+  </div>  
 </section>
 
 <!-- Hardware -->
+<!-- Hardware -->
 <section class="section">
+   <!-- Open Loop -->
    <!-- Open Loop -->
   <div class="container is-max-desktop">
     <div class="columns is-centered">
       <div class="column is-full-width">
         <h2 class="title is-3">Hardware Experiments</h2>
         <p>
+          Four objects within the scene (beachball, keyboard, microwave, phonebook) are semnatically segmented 
+          and chosen as goal locations for our trials. We run using three control schemes (Open-Loop, Closed-Loop VIO, and Splat-Loc) each demonstrated in the videos below. 
+          We refer readers to our <a href="https://arxiv.org/abs/2403.02751">paper</a>
           Four objects within the scene (beachball, keyboard, microwave, phonebook) are semnatically segmented 
           and chosen as goal locations for our trials. We run using three control schemes (Open-Loop, Closed-Loop VIO, and Splat-Loc) each demonstrated in the videos below. 
           We refer readers to our <a href="https://arxiv.org/abs/2403.02751">paper</a>
@@ -222,7 +265,7 @@
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/compressed_beachball_openloop_trimmed.MP4"
+                  <source src="./static/videos/beachball_openloop.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -232,7 +275,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/compressed_keyboard_openloop_trimmed.MP4"
+                    <source src="./static/videos/keyboard_openloop.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -250,7 +293,7 @@
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/compressed_microwave_openloop_trimmed.MP4"
+                  <source src="./static/videos/microwave_openloop.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -260,7 +303,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/compressed_phonebook_openloop_trimmed.MP4"
+                    <source src="./static/videos/phonebook_openloop.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -284,13 +327,14 @@
         <div class="content has-text-justified">
           <p>
             Closed-Loop uses VIO to estimate poses and re-plans accordingly. 
+            Closed-Loop uses VIO to estimate poses and re-plans accordingly. 
           </p>
           <div class="columns is-centered">
 
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/compressed_beachball_closedloop_trimmed.MP4"
+                  <source src="./static/videos/beachball_closedloop.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -300,7 +344,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/compressed_keyboard_closedloop_trimmed.MP4"
+                    <source src="./static/videos/keyboard_closedloop.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -318,7 +362,7 @@
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/compressed_microwave_closedloop_trimmed.MP4"
+                  <source src="./static/videos/microwave_closedloop.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -328,7 +372,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/compressed_phonebook_closedloop_trimmed.MP4"
+                    <source src="./static/videos/phonebook_closedloop.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -359,7 +403,7 @@
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/compressed_beachball_splatloc_trimmed.MP4"
+                  <source src="./static/videos/beachball_splatloc.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -369,7 +413,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/compressed_keyboard_splatloc_trimmed.MP4"
+                    <source src="./static/videos/keyboard_splatloc.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -387,7 +431,7 @@
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/compressed_microwave_splatloc_trimmed.MP4"
+                  <source src="./static/videos/microwave_splatloc.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -397,7 +441,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/compressed_phonebook_splatloc_trimmed.MP4"
+                    <source src="./static/videos/phonebook_splatloc.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -427,7 +471,7 @@
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/compressed_beachball_fast_trimmed.MP4"
+                  <source src="./static/videos/beachball_fast.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -437,7 +481,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/compressed_keyboard_fast_trimmed.MP4"
+                    <source src="./static/videos/keyboard_fast.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -455,7 +499,7 @@
             <div class="column">
               <div class="content">        
                 <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                  <source src="./static/videos/compressed_microwave_fast_trimmed.MP4"
+                  <source src="./static/videos/microwave_fast.MP4"
                           type="video/mp4">
                 </video>
               </div>
@@ -465,7 +509,7 @@
               <div class="columns is-centered">
                 <div class="column content">
                   <video poster="" id="steve" autoplay controls muted loop playsinline height="100%">
-                    <source src="./static/videos/compressed_phonebook_fast_trimmed.MP4"
+                    <source src="./static/videos/phonebook_fast.MP4"
                             type="video/mp4">
                   </video>
                 </div>
@@ -475,18 +519,31 @@
           </div>
         </div>
 
+
       </div>
     </div>
   </div>
 
   
+
+  
 </section>
+
 
 
 <section class="section" id="BibTeX">
   <div class="container is-max-desktop content">
     <h2 class="title">BibTeX</h2>
     <pre><code>
+      @misc{chen2024splatnavsaferealtimerobot,
+        title={Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps}, 
+        author={Timothy Chen and Ola Shorinwa and Joseph Bruno and Aiden Swann and Javier Yu and Weijia Zeng and Keiko Nagami and Philip Dames and Mac Schwager},
+        year={2024},
+        eprint={2403.02751},
+        archivePrefix={arXiv},
+        primaryClass={cs.RO},
+        url={https://arxiv.org/abs/2403.02751}, 
+      }
       @misc{chen2024splatnavsaferealtimerobot,
         title={Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps}, 
         author={Timothy Chen and Ola Shorinwa and Joseph Bruno and Aiden Swann and Javier Yu and Weijia Zeng and Keiko Nagami and Philip Dames and Mac Schwager},
