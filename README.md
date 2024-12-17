@@ -1,13 +1,15 @@
-# SAFER-Splat: Safety with Control Barrier Functions in Online Gaussian Splatting Maps
-Repository for the [SAFER-Splat website](https://chengine.github.io/safer-splat/).
+Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps
+Repository for the [Splat-Nav website](https://chengine.github.io/splatnav/).
 ```
-
-      @misc{chen2024safer-splat,
-        title={SAFER-Splat: Safety with Control Barrier Functions in Online Gaussian Splatting Maps}, 
-        author={Timothy Chen and Aiden Swann and Javier Yu and Ola Shorinwa and Riku Murai and Monroe Kennedy III and Mac Schwager},
-        journal={arXiv preprint arXiv:2409.09868},
-        year={2024}
-        }
+      @misc{chen2024splatnavsaferealtimerobot,
+            title={Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps}, 
+            author={Timothy Chen and Ola Shorinwa and Joseph Bruno and Javier Yu and Weijia Zeng and Keiko Nagami and Philip Dames and Mac Schwager},
+            year={2024},
+            eprint={2403.02751},
+            archivePrefix={arXiv},
+            primaryClass={cs.RO},
+            url={https://arxiv.org/abs/2403.02751}, 
+      }
 ```
 
 We would like to thank the authors of [Nerfies](https://nerfies.github.io) for sharing the template from
