@@ -1,4 +1,4 @@
-Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps
+## Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps
 Repository for the [Splat-Nav website](https://chengine.github.io/splatnav/).
 ```
       @misc{chen2024splatnavsaferealtimerobot,
