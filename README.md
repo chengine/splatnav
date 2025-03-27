@@ -10,11 +10,11 @@ Gaussian Splatting Maps</h2>
     ·
     <a href="https://www.joseph-bruno.com/"><strong>Joseph Bruno</strong><sup>3</sup></a>
     ·
+    <a href="https://aidenswann.com/"><strong>Aiden Swann</strong><sup>1</sup></a>
+    ·
     <a href="https://msl.stanford.edu/people/javieryu"><strong>Javier Yu</strong><sup>1</sup></a>
     ·
     <a href="https://x.com/WeijiaZeng1"><strong>Weijia Zeng</strong><sup>2</sup></a>
-    ·
-    <a href="https://aidenswann.com/"><strong>Aiden Swann</strong><sup>1</sup></a>
     ·
     <a href="https://msl.stanford.edu/people/keikonagami"><strong>Keiko Nagami</strong><sup>1</sup></a>
     ·
@@ -42,77 +42,54 @@ Splat-Nav consists of two components: Splat-Plan, a safe planning module, and Sp
 ## About
 Splat-Plan builds a safe-by-construction polytope corridor through the map based on mathematically rigorous collision constraints and then constructs a Bezier curve trajectory through this corridor. Splat-Loc provides a robust state estimation module, leveraging the point-cloud representation inherent in GSplat scenes for recursive real-time pose localization, given only RGB images. The most compute-intensive procedures in our navigation pipeline, such as the computation of the Bezier trajectories and the pose optimization problem run primarily on the CPU, freeing up GPU resources for GPU-intensive tasks, such as online training of Gaussian Splats. We demonstrate the safety and robustness of our pipeline in both simulation and hardware experiments, where we show online re-planning at greater than 5 Hz and pose estimation at about 25 Hz, an order of magnitude faster than Neural Radiance Field (NeRF)-based navigation methods, thereby enabling real-time navigation. 
 
-## TODOs
-1. Upload corresponding ROS nodes.
+## ROS Nodes
+This branch is where you would run the associated ROS nodes with Splat-Nav (i.e. Splat-Plan and Splat-Loc). 
 
 ## Dependencies
-This repository is built off of [Nerfstudio](https://github.com/nerfstudio-project/nerfstudio/tree/main). Please first follow the installation instructions there before installing any of the dependencies specifically for this repository. Once you have Nerfstudio installed in your Conda environment, install the following dependencies in that environment.
+Make sure that you can run the simulation code on your dataset and GSplat model in the `main` branch. Therefore, you need to have all the dependencies installed from that branch first. This codebase runs on ROS 2.
 
-* [Clarabel](https://github.com/oxfordcontrol/Clarabel.rs). This library is for solving the quadratic program.
-* [dijkstra3d](https://github.com/seung-lab/dijkstra3d). This library is for solving A* for path initialization.
-* [polytope](https://github.com/tulip-control/polytope/tree/main). This library is for performing certain operations with polytopes.
-* [cvxopt](https://cvxopt.org/). Generic convex solver.
-* [cvxpy](https://www.cvxpy.org/). Generic convex solver.
-* [unfoldNd](https://github.com/f-dangel/unfoldNd). Necessary to perform Maxpool3D operation over masked kernel for producing voxel grid.
-* [LightGlue](https://github.com/cvg/LightGlue). Feature matching for Splat-Loc.
-* [viser](https://github.com/nerfstudio-project/viser). Web-based 3D interactive visualizer. This already comes with Nerfstudio, however the latest version is needed to render Gaussian Splats.
+Splat-Plan always requires a pose source to run in order for it to plan from an initial position. This pose can come externally from VIO/SLAM or from Splat-Loc. 
+
+If you want to specify goal locations through text, you will need to train your model differently from `splatfacto`. Please look at the `semantics` branch of this repository to train your semantic GSplat. 
 
 ## Datasets
-Our datasets, trained models, and trajectories are hosted on a [Google Drive](https://drive.google.com/drive/folders/1K0zfpuAti43YIBK5APFd-Yv73CvljgMC?usp=sharing). The scenes used in the paper are `flightgate` (`flight`), `statues`,  `stonehenge`, `adirondacks` (which is also named `old union`). The training data and model is in the `training` folder, while the trajectories are in `traj` (simulated) and `ros` (hardware). You can drag and drop these folders into your working directory.
-
-Here's an example:
-```
-Splat-Nav
-├── data                                                                                                       
-│   └── flight
-│       └── images
-│       └── transforms.json                                                                                  
-│                                                                                               
-├──outputs                                                                                                                                                      
-│   └── flight                                                                                                  
-│       └── splatfacto                                                                                                                             
-│           └── 2024-09-12_172434                                                                               
-│               └── nerfstudio_models
-|               └── config.yml
-|               └── dataparser_transforms.json # This file contains the transform that transforms from "Data" frame to "Nerfstudio" frame (which is typically a unit box)
-├── run.py
-```
+Your data format should be the same as in the `main` branch. 
 
 ## Running Splat-Nav
-
-### Splat-Plan
-After the dependencies, data, and model is set up, run
-```
-python run_splatplan.py
-```
-to execute Splat-Plan on simulated scenes. The most important thing is to ensure that the path in NeRFWrapper is pointing to the right model location. Many parameters can be tuned in this file. The trajectory data will be saved in the `trajs` folder.
-
-#### Baselines
-Within `run.py`, there is also the option to run our Python implementation of the Safe Flight Corridor baseline (https://ieeexplore.ieee.org/document/7839930). The RRT* baseline can be executed through `run_rrt.py`.
 
 ### Splat-Loc
 Similarly, run
 ```
-python run_splatloc.py
+python splat_loc_node.py
 ```
-to execute Splat-Loc on specified trained models and datasets. 
+to execute Splat-Loc on the trained scene. There is a strong assumption that the camera used to train the GSplat is the same one that is streamed to Splat-Loc at test time. While our method can handle different train/test cameras, this functionality is not implemented. As a sanity check, it is HIGHLY advised that users run Splat-Loc and Splat-Plan (do NOT press anything after running Splat-Plan, we only run Splat-Plan to visualize the point cloud. Alternatively, you can set the `/control` topic to something that's not being used) and see if the Splat-Loc pose matches with the scene. If you are also running VIO/SLAM, it would also be advised to check the two estimates and verify that they are somewhat close to each other.
 
-### Visualizing the paths
-Data visualization is done through viser (https://github.com/nerfstudio-project/viser). It is a web-based 3D interactive visualizer that supports meshes and Gaussian Splatting. Viser also supports programmatic view rendering, which was used to generate many of the visuals in our videos. To visualize the trajectories in viser, run
+### Splat-Plan
+After the dependencies, data, and model is set up, run
 ```
-python visualize.py
+python run_ros.py
 ```
-. The latest version of viser should be used, as that supports Gaussian Splatting rendering.
+to execute Splat-Plan. 
 
-## Generating your own scenes
-To use your own datasets, simply train a Nerfstudio `splatfacto` model and follow the folder structure as illustrated above. We also provide a simple way of producing sparse reconstructions of the scene by including a simple L1 sparsity loss on the opacity during Gaussian Splatting training (https://github.com/chengine/sparse_splat). These sparser models are also provided in the Google Drive. In `run.py`, there is a flag to use the sparser model. 
+Ensure that the pose source in `run_ros` points to your correct pose topic. You need to manually set the pose source (`external` for VIO/SLAM and `splat-loc` for Splat-Loc) in the header. Also, the topic names (especially your VIO/SLAM pose) needs to be changed to match your setup. If you are using `external`, make sure the pose message is a PoseStamped message.
+
+Ensure the mode is properly set in the header. `open-loop` only takes in the initial position once and plans once. `closed-loop` continually replans until it has reached the goal, ingesting in the pose source to set the new initial pose. 
+
+In order to set the goal location, you have the option of doing this manually or through a text query. For manual entry, you can hard-code this into the variable GOALS. If you want specification through text (e.g. `beachball`), you will need to have a trained model using a semantic GSplat (see dependencies). 
+
+At 10 Hz, the node publishes waypoints from the trajectory in the form of Float32MultiArray under the topic `/control`.
+
+Please parse the `run_ros` code to see if it makes sense for your setup. There are additional parameters that you will need to set within the script to match your setup. We are in no way liable for injury / damage if you choose to use this codebase.
+
+### Visualizing
+The nodes publish the VIO/SLAM poses (PoseStamped, `/vio_pose`), PoseStamped Splat-Loc poses (if you are running Splat-Plan, `/current_pose`), the goal (PoseStamped, `/goal_pose`), the planned trajectory (PoseArray, `/trajectory`), and the GSplat point cloud (PointCloud2, `/gsplat_pcd`). You can visualize these topics through RVIZ. 
 
 ## Citation
 If you found Splat-Nav useful, consider citing us! Thanks!
 ```
 @misc{chen2024splatnav,
       title={Splat-Nav: Safe Real-Time Robot Navigation in Gaussian Splatting Maps}, 
-      author={Timothy Chen and Ola Shorinwa and Joseph Bruno and Javier Yu and Weijia Zeng and Aiden Swann and Keiko Nagami and Philip Dames and Mac Schwager},
+      author={Timothy Chen and Ola Shorinwa and Joseph Bruno and Aiden Swann and Javier Yu and Weijia Zeng and Keiko Nagami and Philip Dames and Mac Schwager},
       year={2024},
       eprint={2403.02751},
       archivePrefix={arXiv},
