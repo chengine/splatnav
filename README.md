@@ -10,11 +10,11 @@ Gaussian Splatting Maps</h2>
     ·
     <a href="https://www.joseph-bruno.com/"><strong>Joseph Bruno</strong><sup>3</sup></a>
     ·
+    <a href="https://aidenswann.com/"><strong>Aiden Swann</strong><sup>1</sup></a>
+    ·
     <a href="https://msl.stanford.edu/people/javieryu"><strong>Javier Yu</strong><sup>1</sup></a>
     ·
     <a href="https://x.com/WeijiaZeng1"><strong>Weijia Zeng</strong><sup>2</sup></a>
-    ·
-    <a href="https://aidenswann.com/"><strong>Aiden Swann</strong><sup>1</sup></a>
     ·
     <a href="https://msl.stanford.edu/people/keikonagami"><strong>Keiko Nagami</strong><sup>1</sup></a>
     ·
@@ -42,8 +42,9 @@ Splat-Nav consists of two components: Splat-Plan, a safe planning module, and Sp
 ## About
 Splat-Plan builds a safe-by-construction polytope corridor through the map based on mathematically rigorous collision constraints and then constructs a Bezier curve trajectory through this corridor. Splat-Loc provides a robust state estimation module, leveraging the point-cloud representation inherent in GSplat scenes for recursive real-time pose localization, given only RGB images. The most compute-intensive procedures in our navigation pipeline, such as the computation of the Bezier trajectories and the pose optimization problem run primarily on the CPU, freeing up GPU resources for GPU-intensive tasks, such as online training of Gaussian Splats. We demonstrate the safety and robustness of our pipeline in both simulation and hardware experiments, where we show online re-planning at greater than 5 Hz and pose estimation at about 25 Hz, an order of magnitude faster than Neural Radiance Field (NeRF)-based navigation methods, thereby enabling real-time navigation. 
 
-## TODOs
-1. ~~Upload corresponding ROS nodes.~~ Our ROS nodes can now be found in the `ros` branch of this repository.
+## Features
+1. Our ROS nodes for Splat-Plan and Splat-Loc can now be found in the `ros` branch of this repository.
+2. Splat-Nav supports semantic goal querying. While in practice, Splat-Nav can use any semantic GSplats to query a goal, our results run on an in-house semantic GSplat model, which can be found in the `semantics` branch of this repository.
 
 ## Dependencies
 This repository is built off of [Nerfstudio](https://github.com/nerfstudio-project/nerfstudio/tree/main). Please first follow the installation instructions there before installing any of the dependencies specifically for this repository. Once you have Nerfstudio installed in your Conda environment, install the following dependencies in that environment.
@@ -85,7 +86,7 @@ After the dependencies, data, and model is set up, run
 ```
 python run_splatplan.py
 ```
-to execute Splat-Plan on simulated scenes. The most important thing is to ensure that the path in NeRFWrapper is pointing to the right model location. Many parameters can be tuned in this file. The trajectory data will be saved in the `trajs` folder.
+to execute Splat-Plan on simulated scenes. The most important thing is to ensure that the path in GSplatLoader is pointing to the right model location. Many parameters can be tuned in this file. The trajectory data will be saved in the `trajs` folder.
 
 #### Baselines
 Within `run.py`, there is also the option to run our Python implementation of the Safe Flight Corridor baseline (https://ieeexplore.ieee.org/document/7839930). The RRT* baseline can be executed through `run_rrt.py`.
