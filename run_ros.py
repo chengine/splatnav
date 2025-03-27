@@ -43,8 +43,8 @@ GOAL_QUERIES = ['keyboard', 'beachball', 'phonebook', 'microwave']
 
 GOAL_ID = 0
 TRIAL_ID = 0
-MODE = 'closed-loop'
-POSE_SOURCE = 'external'
+MODE = 'closed-loop'            # ['open-loop', 'closed-loop']
+POSE_SOURCE = 'external'        # ['external', 'splat-loc']. Note: 'open-loop' only works with 'external' pose source.
 #POSE_SOURCE = 'splat-loc'
 
 # we precomute this for faster start up time.
@@ -91,7 +91,8 @@ class ControlNode(Node):
         self.goal_publisher = self.create_publisher(PoseStamped, "/goal_pose", 10)
         self.goal_timer = self.create_timer(1.0, self.goal_callback)
 
-        # When rebpulished pose is updated, we update the trajectory too! ONLY WORKS FOR SLOW REBPUB RATES
+        # NOTE: This is where you set the incoming pose topic!
+        # When rebpulished pose is updated, we update the trajectory too! 
         self.pose_source = pose_source
         if pose_source == 'external':
             print('Getting poses externally!!!')
@@ -112,13 +113,14 @@ class ControlNode(Node):
         else:
             raise ValueError('Not a valid pose source')
         
-        # Publish vio pose source
+        # Publish vio pose source for visualization (not necessary)
         self.vio_publisher = self.create_publisher(PoseStamped, "/vio_pose", 10)
 
         # The state of SplatPlan. This is used to trigger replanning. 
         self.current_pose_publisher = self.create_publisher(PoseStamped, "/current_pose", 10)
 
         ### Initialize state variables  ###
+        # This is what we publish before we send any waypoints. NOTE: Make sure you change this according to your setup!
         self.position_output = np.array([0.0, 0.0, -0.75])
         self.velocity_output = np.array([0.0, 0.0, 0.0])
         self.acceleration_output = np.array([0.0, 0.0, 0.0])
@@ -140,15 +142,16 @@ class ControlNode(Node):
         ### SPLATPLAN INITIALIZATION ###
         ############# Specify scene specific data here  #############
         # Points to the config file for the GSplat
+        # Note: This needs to be changed for your setup
         path_to_gsplat = Path('outputs/registered/gemsplat/2024-12-05_155215/config.yml')
 
         self.radius = 0.25       # radius of robot
-        self.amax = 1.
-        self.vmax = 1.      # max velocity of robot. THIS IS ALSO USED FOR ROS CONTROL!
+        self.amax = 1.        # max acceleration
+        self.vmax = 1.      # max velocity of robot.
 
-        lower_bound = torch.tensor([0., -2.5, -1.5], device=device)
-        upper_bound = torch.tensor([5., 2., 0.25], device=device)
-        resolution = 80
+        lower_bound = torch.tensor([0., -2.5, -1.5], device=device)        # Lower bound of the scene bounding box
+        upper_bound = torch.tensor([5., 2., 0.25], device=device)           # upper bound of scene bounding box
+        resolution = 80                                                    # discretization of the grid
 
         #################
         # Robot configuration
@@ -173,6 +176,8 @@ class ControlNode(Node):
 
 
         ### CALCULATE GOAL LOcATIONS ###
+        # NOTE: You can uncommend the code below if you want to compute arbitrary goal locations based on semantics.
+        # We recorded the queried semantic goal locations and just hard-coded them to expedite our statistical tests since the scene is static.
         self.goal_queries = ['keyboard', 'beachball', 'phonebook', 'microwave']
 
         # goal = get_goal_locations(self.gsplat.splat,
@@ -182,6 +187,7 @@ class ControlNode(Node):
         # )[0]
         # print('Goal', goal)
 
+        # NOTE: Your designed goal location goes here
         goal = GOALS[GOAL_ID]
 
         self.goal = goal.tolist()
@@ -197,7 +203,8 @@ class ControlNode(Node):
         self.time_of_last_state_estimate = None
 
         self.outputs = []
-        
+
+        # This is used for using Splat-loc to bridge the gap between the VIO/SLAM frame and the nerfstudio/Splat-Loc frame
         self.transform = np.eye(4)
         self.current_rotation = np.array([0., 0., 0., 1.])
         self.current_rotation_matrix = np.eye(3)
@@ -205,7 +212,8 @@ class ControlNode(Node):
         self.current_pose = np.eye(4)
 
         print("SplatPlan Initialized...")
-        
+
+    # Does replanning everything we receive a new VIO/SLAM pose. If you set the mode to 'open-loop', this only executes ONCE.
     def trajectory_callback(self, msg):
         if msg is not None:
             current_time = self.get_clock().now().to_msg()
@@ -325,6 +333,7 @@ class ControlNode(Node):
 
         return
 
+    # Looks at the time since we last replanned, and queried the time-dependent parameteric spline for position, vel, accel, and jerk.
     def publish_control(self):
         # Get current time so we know how much time as elapsed since last replan
         current_time = self.get_clock().now().to_msg()
@@ -332,7 +341,7 @@ class ControlNode(Node):
         
         control_msg = Float32MultiArray()
 
-        # pop from the first element of the trajectory 
+        # Only publishes a waypoint if we have started the mission (downpressed 1) and we have a valid traj to query from (i.e. trajectory callback has been triggered)
         if (self.start_mission) and self.traj is not None:
 
             t_query = current_time_f - self.time_of_last_replan
@@ -346,7 +355,7 @@ class ControlNode(Node):
             x0[2] = torch.tensor(self.acceleration_output, device=device)
             x0[3] = torch.tensor(self.jerk_output, device=device)
 
-            # Queries the waypoint
+            # Queries the waypoint based on the queried time since last replan
             output = self.planner.query_waypoint(t_query, t_0, x0).cpu().numpy()
 
             yaw = yaw_from_heading_vector(output[1, 1], output[1, 0])
@@ -362,6 +371,7 @@ class ControlNode(Node):
                 print("Trajectory complete.")
 
         # PUBLISH OUTGOING CONTROL
+        # Does additional rigid body transform to the waypoint if we are using Splat-loc in order to bridge the VIO/SLAM frame and the nerfstudio/Splat-loc frame.
         outgoing_transform = np.eye(4)
         outgoing_transform[:3, -1] = self.position_output[:3]
         outgoing_transform[:3, :3] = yaw_to_rotation_matrix(self.yaw_output)
@@ -380,6 +390,7 @@ class ControlNode(Node):
         self.publish_control_time = self.get_clock().now().to_msg().sec + self.get_clock().now().to_msg().nanosec * 1e-9  
         # print("control message: ", control_msg.data)
 
+    # Queries Splat-Plan for a parametrized spline
     def plan_path(self, start, goal):
 
         # NOTE: Can change the shape of this to accomodate varying number of derivatives
@@ -393,6 +404,7 @@ class ControlNode(Node):
 
         return output['traj'], output
 
+    # Publishes the goal point
     def goal_callback(self):
         msg = PoseStamped()
         msg.header.frame_id = self.map_name
@@ -409,6 +421,7 @@ class ControlNode(Node):
 
         self.goal_publisher.publish(msg)
 
+    # Publishes the GSplat as a point cloud (just the means)
     def pcd_callback(self):
         if self.pcd_msg is None:
             points = self.gsplat.means.cpu().numpy()
@@ -425,8 +438,9 @@ class ControlNode(Node):
 
         self.pcd_publisher.publish(self.pcd_msg)
 
+    # Only starts the mission when you have pressed 1
     def key_listener(self):
-        print("Press the space bar to start the mission.")
+        print("Press 1 to start the mission.")
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
@@ -444,6 +458,7 @@ class ControlNode(Node):
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
+    # Saves relevant data from the trajectory
     def save_data(self):
         save_path = f'traj/{POSE_SOURCE}/{self.original_mode}/{self.goal_queries[GOAL_ID]}/{TRIAL_ID}'
         Path(save_path).mkdir(parents=True, exist_ok=True)
