@@ -219,6 +219,9 @@ class GaussianSplat():
             # colors computed from the term of order 0 in the Spherical Harmonic basis
             # coefficient of the order 0th-term in the Spherical Harmonics basis
             pcd_colors_coeff = self.pipeline.model.features_dc
+
+            with torch.no_grad():
+                clip_embeds = self.pipeline.model.clip_field(pcd_points).float()
             
             try:
                 # other attributes of the Gaussian
